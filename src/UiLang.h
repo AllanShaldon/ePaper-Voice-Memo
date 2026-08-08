@@ -26,11 +26,12 @@
   #define VM_LANG_PT 0
 #endif
 
-// Languages whose glyphs are not in the built-in CP437 bitmap font must render
-// through OpenFontRender with an embedded TrueType face. Chinese needs it for
-// the CJK ideographs; Portuguese needs it because the bitmap font has no
-// "a-tilde" / "o-tilde" glyph at all and maps the rest to the wrong CP437 slot.
-#if VM_LANG_ZH || VM_LANG_PT
+// Only Chinese needs an embedded TrueType face: no CJK ideograph exists in the
+// built-in bitmap font. Portuguese stays on the bitmap font and transliterates
+// through Cp437.h instead -- measured on the panel, a pixel font at its design
+// size reads sharper than a rasterized outline at these sizes, and CP437
+// already carries every Portuguese accent except a-tilde and o-tilde.
+#if VM_LANG_ZH
   #define VM_UI_TTF 1
 #else
   #define VM_UI_TTF 0

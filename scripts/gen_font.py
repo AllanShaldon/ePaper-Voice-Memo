@@ -4,18 +4,15 @@
 # Runs both as a PlatformIO pre-script and as a standalone `python3` script.
 #
 # Targets:
-#   data/test_ZH.ttf    -> src/FontZH.h     (vm_font_zh)     Chinese builds
-#   data/font_latin.ttf -> src/FontLatin.h  (vm_font_latin)  Portuguese builds
+#   data/test_ZH.ttf -> src/FontZH.h (vm_font_zh)   Chinese builds
 #
-# Both are generated when their source exists; only the header the active build
-# includes is ever compiled, so generating both costs disk, not flash.
+# The table is a list so another language that needs an embedded face can be
+# added without touching the logic.
 import os
 
 TARGETS = [
     (os.path.join("data", "test_ZH.ttf"),
      os.path.join("src", "FontZH.h"), "vm_font_zh"),
-    (os.path.join("data", "font_latin.ttf"),
-     os.path.join("src", "FontLatin.h"), "vm_font_latin"),
 ]
 
 

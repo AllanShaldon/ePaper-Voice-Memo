@@ -2,6 +2,10 @@
 
 #include "UiLang.h"
 
+#if !VM_UI_TTF
+#include "Cp437.h"
+#endif
+
 #if VM_UI_TTF
 
 #include "OpenFontRender.h"
@@ -70,9 +74,24 @@ bool TextRenderer::begin(EPaper& display)
   // pixel hooks to paint SOLID ink (g_ink, a real gray index) for every covered
   // pixel via the panel's own virtual drawPixel (the path MemoUI uses). This
   // trades anti-aliasing for crisp, solid Chinese text.
+#if VM_SCREEN_MODE == VM_SCREEN_GRAY4
+  // gray4 keeps anti-aliasing. The panel's four ink levels are the indices
+  // 0..3, which occupy only the low bits of RGB565's blue channel, so OFR's
+  // per-channel fg/bg blend lands on a value that is already a valid gray
+  // index -- the edge blend survives instead of being rounded to solid ink.
+  // This matters for Latin text: at UI sizes a solid-ink glyph reads as
+  // jagged, which is exactly what the gray16 workaround below causes.
+  g_ofr.set_drawPixel([](int32_t px, int32_t py, uint16_t blended) {
+    if (g_disp) g_disp->drawPixel(px, py, blended & 0x03);
+  });
+#else
+  // gray16 (E1003): drawPixel keeps only the low 4 bits of the color, and
+  // OFR's RGB565 blend leaves a meaningless nibble there -- glyphs come out
+  // hollow. Paint solid ink instead, trading anti-aliasing for legibility.
   g_ofr.set_drawPixel([](int32_t px, int32_t py, uint16_t) {
     if (g_disp) g_disp->drawPixel(px, py, g_ink);
   });
+#endif
   g_ofr.set_drawFastHLine([](int32_t px, int32_t py, int32_t pw, uint16_t) {
     if (g_disp) {
       for (int32_t i = 0; i < pw; ++i) g_disp->drawPixel(px + i, py, g_ink);
@@ -89,6 +108,10 @@ bool TextRenderer::begin(EPaper& display)
   fontReady_ = true;
   return true;
 #else
+  // Turn the panel's UTF-8 decoder OFF: with it on, "a-acute" (U+00E1) would
+  // index glyph 225 instead of CP437's 0xA0. Cp437.h does the mapping and
+  // hands over raw glyph indices, so the decoder must stay out of the way.
+  display.setAttribute(UTF8_SWITCH, false);
   fontReady_ = true;    // bitmap font is always available
   return true;
 #endif
@@ -145,7 +168,9 @@ void TextRenderer::drawText(const String& text, int x, int y, int sizeUnit,
   display_->setTextSize(sizeUnit);
   display_->setTextColor(color, bg, true);
   display_->setTextDatum(toTftDatum(align));
-  display_->drawString(text, x, y);
+  // UTF-8 decoding is off (see begin()), so the panel treats each byte as a
+  // glyph index -- which is exactly what the CP437 mapping produces.
+  display_->drawString(vmUtf8ToCp437(text), x, y);
 #endif
 }
 
@@ -158,6 +183,8 @@ int TextRenderer::measureText(const String& text, int sizeUnit)
   return static_cast<int>(g_ofr.getTextWidth("%s", text.c_str()));
 #else
   display_->setTextSize(sizeUnit);
-  return static_cast<int>(display_->textWidth(text));
+  // Measure the same bytes that will be drawn, or wrapping would use one
+  // length and rendering another.
+  return static_cast<int>(display_->textWidth(vmUtf8ToCp437(text)));
 #endif
 }
