@@ -5,6 +5,7 @@
 #include "DisplayText.h"
 #include "DonePolicy.h"
 #include "MemoReplacePolicy.h"
+#include "SortPolicy.h"
 #include "UiLang.h"
 
 namespace {
@@ -12,10 +13,6 @@ namespace {
 constexpr const char* kNvsNamespace = "vmm";
 constexpr const char* kNvsKey       = "items";
 constexpr const char* kNvsLangKey   = "lang";
-
-// Time used to sort entries with no due time. They sink to the very end of
-// the upcoming section by pretending their due is far in the future.
-constexpr time_t kNoDueSortKey = static_cast<time_t>(0x7FFFFFFFLL);
 
 constexpr uint8_t kFlagHasDue = 0x01;
 constexpr uint8_t kFlagDone   = 0x02;
@@ -243,38 +240,28 @@ bool MemoStore::addWithinVisibleLimit(const MemoEntry& entry, size_t visibleMax)
 
 void MemoStore::sortByDue(time_t now)
 {
-  // Two buckets only:
-  //   0 = not done -- strict chronological order, earliest first. An overdue
-  //       reminder therefore rises to the TOP, which is what "order by the
-  //       reminder's date/time" means and what a to-do list wants: the thing
-  //       you already missed is the most urgent, not the least.
-  //   1 = done     -- always at the very bottom, most recently completed first,
-  //       until purgeExpiredDone() removes it.
-  // Entries with no due time sort last inside bucket 0 via kNoDueSortKey.
-  (void)now;   // bucketing no longer depends on the clock
+  // The rule lives in SortPolicy.h so it can be unit-tested without hardware
+  // -- see test/test_sort_policy. In one sentence: pending reminders in
+  // ascending date/time order, completed ones always last.
+  (void)now;   // the order no longer depends on the current clock
 
-  auto bucket = [](const MemoEntry& e) -> int { return e.done ? 1 : 0; };
-  auto sortKey = [](const MemoEntry& e) -> int64_t {
-    if (!e.hasDue) return static_cast<int64_t>(kNoDueSortKey);
-    return static_cast<int64_t>(e.dueEpoch);
-  };
-  auto earlier = [&](const MemoEntry& a, const MemoEntry& b) -> bool {
-    const int ba = bucket(a);
-    const int bb = bucket(b);
-    if (ba != bb) return ba < bb;
-    if (ba == 1) {
-      // Done: newest completion on top of the done pile, so the one about to
-      // expire sits at the very bottom.
-      return a.doneAt > b.doneAt;
-    }
-    return sortKey(a) < sortKey(b);   // pending: chronological
+  auto asSortItem = [](const MemoEntry& e) -> VmSortItem {
+    VmSortItem s;
+    s.done     = e.done;
+    s.doneAt   = e.doneAt;
+    s.hasDue   = e.hasDue;
+    s.dueEpoch = e.dueEpoch;
+    return s;
   };
 
   // Insertion sort (n <= 8): tiny binary, no <algorithm> include.
   for (size_t i = 1; i < count_; i++) {
     MemoEntry key = items_[i];
+    const VmSortItem keyS = asSortItem(key);
     size_t j = i;
-    while (j > 0 && earlier(key, items_[j - 1])) {
+    while (j > 0) {
+      const VmSortItem prevS = asSortItem(items_[j - 1]);
+      if (!vmSortBefore(&keyS, &prevS)) break;
       items_[j] = items_[j - 1];
       j--;
     }

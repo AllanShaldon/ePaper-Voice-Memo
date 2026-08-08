@@ -635,9 +635,11 @@ void MemoUI::drawTodoList(MemoStore& store, RtcClock& rtc,
                           int scrollOffset)
 {
   const time_t nowEpoch = rtc.nowEpoch();
-#if VM_SCREEN_MODE == VM_SCREEN_GRAY16
+  // Sort on EVERY panel. This used to be fenced behind VM_SCREEN_GRAY16, so
+  // the compact panels rendered in insertion order and a completed reminder
+  // stayed wherever it happened to sit. It only ever looked right by accident,
+  // when the newest entry was also the one just completed.
   store.sortByDue(nowEpoch);
-#endif
 
   // Reset hit cache. Cards that get drawn refill their slot.
   for (size_t i = 0; i < MemoStore::kMax; i++) checkboxHits_[i].valid = false;
