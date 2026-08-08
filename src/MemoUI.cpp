@@ -384,11 +384,13 @@ void MemoUI::drawCard(int x, int y, int w, int h,
   // Layout common to both right-side rendering modes.
   const int memoX    = x + 24 + boxSize + 24;
   const int rightPad = 28;
-  const int rightW   = 360;
+  // Completed reminders drop the whole date column and take the full width --
+  // see drawCompactCard for the reasoning; the two panels must not diverge.
+  const int rightW   = entry.done ? 0 : 360;
   const int memoMaxW = (x + w - rightPad - rightW) - memoX;
 
   // ---- Right side: date chip (top) + big time / time-of-day (bottom) ----
-  {
+  if (!entry.done) {
     String dateChip, timeBig;
     bool   over = false;
     formatDueLabel(nowEpoch, entry, dateChip, timeBig, over);
@@ -466,35 +468,41 @@ void MemoUI::drawCompactCard(int x, int y, int w, int h,
 
   const int memoX = x + 12 + boxSize + 10;
   const int rightPad = 10;
-  const int rightW = 122;
+  // A completed reminder shows no date column at all, so its text gets the
+  // full card width. Nothing on the right is worth saying any more: it is
+  // done, so it is not "Overdue" -- that label would be plainly wrong -- and
+  // when it was due stopped mattering the moment it was checked off.
+  const int rightW = entry.done ? 0 : 122;
   const int memoMaxW = max(80, (x + w - rightPad - rightW) - memoX);
 
-  String dateChip, timeBig;
-  bool over = false;
-  formatDueLabel(nowEpoch, entry, dateChip, timeBig, over);
-  if (entry.fuzzyLabel == "NONE") {
-    timeBig = "";
-  } else if (entry.fuzzyLabel.length() > 0) {
-    timeBig = entry.fuzzyLabel;
-  }
+  if (!entry.done) {
+    String dateChip, timeBig;
+    bool over = false;
+    formatDueLabel(nowEpoch, entry, dateChip, timeBig, over);
+    if (entry.fuzzyLabel == "NONE") {
+      timeBig = "";
+    } else if (entry.fuzzyLabel.length() > 0) {
+      timeBig = entry.fuzzyLabel;
+    }
 
-  const int rightEdge = x + w - rightPad;
-  const int chipPad = 6;
-  const int chipH = 25;
-  const int chipSize = 2;
-  const int chipW = min(rightW, renderer_.measureText(dateChip, chipSize) + chipPad * 2);
-  const int chipX = rightEdge - chipW;
-  const int chipY = y + 7;
-  const uint16_t chipFill = overdue ? kUiCardDark
-                             : (entry.done ? kUiMuted : kUiBadge);
-  display_.fillRoundRect(chipX, chipY, chipW, chipH, 4, chipFill);
-  renderer_.drawText(dateChip, chipX + chipW / 2, chipY + chipH / 2,
-                     chipSize, TextAlign::MiddleCenter, inkOn(chipFill),
-                     chipFill);
+    const int rightEdge = x + w - rightPad;
+    const int chipPad = 6;
+    const int chipH = 25;
+    const int chipSize = 2;
+    const int chipW =
+        min(rightW, renderer_.measureText(dateChip, chipSize) + chipPad * 2);
+    const int chipX = rightEdge - chipW;
+    const int chipY = y + 7;
+    const uint16_t chipFill = overdue ? kUiCardDark : kUiBadge;
+    display_.fillRoundRect(chipX, chipY, chipW, chipH, 4, chipFill);
+    renderer_.drawText(dateChip, chipX + chipW / 2, chipY + chipH / 2,
+                       chipSize, TextAlign::MiddleCenter, inkOn(chipFill),
+                       chipFill);
 
-  if (timeBig.length() > 0) {
-    renderer_.drawText(timeBig, rightEdge, y + h - 8, 2,
-                       TextAlign::BottomRight, fg, fill);
+    if (timeBig.length() > 0) {
+      renderer_.drawText(timeBig, rightEdge, y + h - 8, 2,
+                         TextAlign::BottomRight, fg, fill);
+    }
   }
 
   const int memoSize = 2;
