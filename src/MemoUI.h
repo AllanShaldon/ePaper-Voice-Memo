@@ -59,7 +59,8 @@ class MemoUI {
                     const UiStatus& status,
                     const String& hint,
                     const String& quote,
-                    int selectedIndex = -1);
+                    int selectedIndex = -1,
+                    int scrollOffset = 0);
 
   // One-page boot/splash screen reusing the header.
   void drawBoot(RtcClock& rtc, const String& statusText, const UiStatus& status);

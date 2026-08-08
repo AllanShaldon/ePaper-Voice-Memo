@@ -631,7 +631,8 @@ void MemoUI::drawBoot(RtcClock& rtc, const String& statusText, const UiStatus& s
 
 void MemoUI::drawTodoList(MemoStore& store, RtcClock& rtc,
                           const UiStatus& status, const String& hint,
-                          const String& quote, int selectedIndex)
+                          const String& quote, int selectedIndex,
+                          int scrollOffset)
 {
   const time_t nowEpoch = rtc.nowEpoch();
 #if VM_SCREEN_MODE == VM_SCREEN_GRAY16
@@ -707,11 +708,29 @@ void MemoUI::drawTodoList(MemoStore& store, RtcClock& rtc,
                        listTop + (listBottom - listTop) / 2, 2,
                        TextAlign::MiddleCenter, kUiMuted, kUiBg);
   } else {
-    const size_t renderCount = min(store.count(), static_cast<size_t>(visibleMax));
-    for (size_t i = 0; i < renderCount; i++) {
-      const int cardY = listTop + static_cast<int>(i) * rowH + gap / 2;
+    // Draw the window [scrollOffset, scrollOffset + visibleMax) rather than
+    // always the first page, so KEY1/KEY2 can reach every stored reminder.
+    size_t first = static_cast<size_t>(max(0, scrollOffset));
+    if (first >= store.count()) first = 0;
+    const size_t renderCount =
+        min(store.count() - first, static_cast<size_t>(visibleMax));
+    for (size_t k = 0; k < renderCount; k++) {
+      const size_t i = first + k;
+      const int cardY = listTop + static_cast<int>(k) * rowH + gap / 2;
       drawCompactCard(margin, cardY, cardW, cardH, store.at(i), nowEpoch,
                       checkboxHits_[i], static_cast<int>(i) == selectedIndex);
+    }
+
+    // Position hint, drawn only when the list does not fit. Without it the
+    // panel gives no clue that anything exists past the fourth card.
+    if (store.count() > static_cast<size_t>(visibleMax)) {
+      char pos[24];
+      snprintf(pos, sizeof(pos), "%u-%u/%u",
+               static_cast<unsigned>(first + 1),
+               static_cast<unsigned>(first + renderCount),
+               static_cast<unsigned>(store.count()));
+      renderer_.drawText(pos, w - margin, listTop - 4, 1,
+                         TextAlign::BottomRight, kUiMuted, kUiBg);
     }
   }
 

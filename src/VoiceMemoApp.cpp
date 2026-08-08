@@ -78,13 +78,14 @@ void VoiceMemoApp::drawTodoList(const String& hint, bool processing,
   // here means every redraw is also a garbage-collection tick, so nothing
   // lingers just because the user never pressed anything.
   if (store_.purgeExpiredDone(nowEpoch)) selectedIndex_ = -1;
+  clampScroll();
   bool quoteNetworkReady = false;
   if (allowQuoteNetwork && quote_.needsRefresh(nowEpoch)) {
     quoteNetworkReady = (WiFi.status() == WL_CONNECTED) || ensureWiFi(5000);
   }
   quote_.refreshIfNeeded(nowEpoch, quoteNetworkReady);
   ui_.drawTodoList(store_, rtc_, currentStatus(processing), hint, quote_.quote(),
-                   selectedIndex_);
+                   selectedIndex_, scrollOffset_);
   lastListRefreshMs_ = millis();
 }
 
@@ -231,11 +232,12 @@ void VoiceMemoApp::stopRecording(bool forced)
                  entry.text.c_str(), static_cast<long long>(entry.dueEpoch),
                  entry.fuzzyLabel.c_str());
 
-#if VM_HAS_TOUCH
+  // Every panel now keeps the full MemoStore::kMax. The non-touch panels used
+  // to cap at VM_VISIBLE_MEMO_MAX because nothing could scroll, so an entry
+  // off-page was unreachable -- the fifth reminder silently overwrote one you
+  // could still see. KEY1/KEY2 scroll the window now, so that cap only lost
+  // reminders.
   store_.add(entry);
-#else
-  store_.addWithinVisibleLimit(entry, VM_VISIBLE_MEMO_MAX);
-#endif
   ledOff();
 
   const String hint = forced
@@ -298,22 +300,44 @@ void VoiceMemoApp::moveSelection(int delta)
 {
   if (recording_ || busy_) return;
   const int n = static_cast<int>(store_.count());
-  if (n <= 0) { selectedIndex_ = -1; return; }
-
-  // Only the cards actually on screen can be selected: selecting an off-page
-  // entry would move a highlight the user cannot see.
-  const int visible = (n < VM_VISIBLE_MEMO_MAX) ? n : VM_VISIBLE_MEMO_MAX;
+  if (n <= 0) { selectedIndex_ = -1; scrollOffset_ = 0; return; }
 
   if (selectedIndex_ < 0) {
-    // First press enters the list from the end the user is reaching toward.
-    selectedIndex_ = (delta > 0) ? 0 : visible - 1;
+    // First press enters at the edge of the page already on screen, not at the
+    // top of the list -- jumping the view on the first keypress reads as a bug.
+    selectedIndex_ = (delta > 0) ? scrollOffset_
+                                 : scrollOffset_ + VM_VISIBLE_MEMO_MAX - 1;
+    if (selectedIndex_ >= n) selectedIndex_ = n - 1;
   } else {
     selectedIndex_ += delta;
-    if (selectedIndex_ < 0) selectedIndex_ = 0;
-    if (selectedIndex_ >= visible) selectedIndex_ = visible - 1;
   }
-  Serial1.printf("[nav] selecao=%d de %d\n", selectedIndex_, visible);
+  if (selectedIndex_ < 0) selectedIndex_ = 0;
+  if (selectedIndex_ >= n) selectedIndex_ = n - 1;
+
+  clampScroll();
+  Serial1.printf("[nav] selecao=%d de %d (janela em %d)\n",
+                 selectedIndex_, n, scrollOffset_);
   drawTodoList(uiStr(UiStringId::kHintAdd), false, false);
+}
+
+void VoiceMemoApp::clampScroll()
+{
+  const int n = static_cast<int>(store_.count());
+  const int page = VM_VISIBLE_MEMO_MAX;
+
+  // Keep the window inside the list first, so a purge that shrank the list
+  // cannot leave the view parked past the end showing nothing.
+  const int maxOffset = (n > page) ? (n - page) : 0;
+  if (scrollOffset_ > maxOffset) scrollOffset_ = maxOffset;
+  if (scrollOffset_ < 0) scrollOffset_ = 0;
+
+  // Then scroll the minimum needed to bring the selection into view.
+  if (selectedIndex_ >= 0) {
+    if (selectedIndex_ < scrollOffset_) scrollOffset_ = selectedIndex_;
+    if (selectedIndex_ >= scrollOffset_ + page) {
+      scrollOffset_ = selectedIndex_ - page + 1;
+    }
+  }
 }
 
 void VoiceMemoApp::toggleSelected()

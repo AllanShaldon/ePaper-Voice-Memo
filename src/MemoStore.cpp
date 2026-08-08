@@ -243,16 +243,18 @@ bool MemoStore::addWithinVisibleLimit(const MemoEntry& entry, size_t visibleMax)
 
 void MemoStore::sortByDue(time_t now)
 {
-  // Three buckets in display order:
-  //   0 = undone upcoming  (asc by due, soonest first)
-  //   1 = undone overdue   (desc by due, most-recently overdue first)
-  //   2 = done             (desc by due)
-  auto bucket = [&](const MemoEntry& e) -> int {
-    if (e.done) return 2;
-    if (e.hasDue && e.dueEpoch < now) return 1;
-    return 0;
-  };
-  auto sortKey = [&](const MemoEntry& e) -> int64_t {
+  // Two buckets only:
+  //   0 = not done -- strict chronological order, earliest first. An overdue
+  //       reminder therefore rises to the TOP, which is what "order by the
+  //       reminder's date/time" means and what a to-do list wants: the thing
+  //       you already missed is the most urgent, not the least.
+  //   1 = done     -- always at the very bottom, most recently completed first,
+  //       until purgeExpiredDone() removes it.
+  // Entries with no due time sort last inside bucket 0 via kNoDueSortKey.
+  (void)now;   // bucketing no longer depends on the clock
+
+  auto bucket = [](const MemoEntry& e) -> int { return e.done ? 1 : 0; };
+  auto sortKey = [](const MemoEntry& e) -> int64_t {
     if (!e.hasDue) return static_cast<int64_t>(kNoDueSortKey);
     return static_cast<int64_t>(e.dueEpoch);
   };
@@ -260,10 +262,12 @@ void MemoStore::sortByDue(time_t now)
     const int ba = bucket(a);
     const int bb = bucket(b);
     if (ba != bb) return ba < bb;
-    const int64_t ka = sortKey(a);
-    const int64_t kb = sortKey(b);
-    if (ba == 0) return ka < kb;   // upcoming: soonest first
-    return ka > kb;                // overdue / done: most recent first
+    if (ba == 1) {
+      // Done: newest completion on top of the done pile, so the one about to
+      // expire sits at the very bottom.
+      return a.doneAt > b.doneAt;
+    }
+    return sortKey(a) < sortKey(b);   // pending: chronological
   };
 
   // Insertion sort (n <= 8): tiny binary, no <algorithm> include.

@@ -109,6 +109,9 @@ class VoiceMemoApp {
   // the state the device boots into so a stray KEY0 click cannot complete a
   // reminder the user never pointed at.
   int           selectedIndex_ = -1;
+  // First list index drawn on screen. The panel shows VM_VISIBLE_MEMO_MAX
+  // cards at a time while the store holds MemoStore::kMax.
+  int           scrollOffset_ = 0;
   // Debounce state for the two navigation keys, same shape as KEY0's.
   bool          lastRawKey1_ = HIGH;
   bool          stableKey1_  = HIGH;
@@ -139,6 +142,8 @@ class VoiceMemoApp {
   // Moves the selection cursor by delta over the visible cards, clamping at
   // both ends, and redraws. No-op while recording or busy.
   void moveSelection(int delta);
+  // Keeps scrollOffset_ inside the list and the selection inside the window.
+  void clampScroll();
   // Completes / un-completes the selected card. No-op when nothing is selected.
   void toggleSelected();
   void pollScheduledRefresh();
