@@ -78,6 +78,13 @@ class VoiceMemoApp {
   static constexpr int kBatteryAdcPin    = 1;
 
   static constexpr unsigned long kDebounceDelayMs = 35;
+
+  // A KEY0 press shorter than this is a CLICK (complete the selected card),
+  // not a recording. Measured on the hardware: deliberate taps land at
+  // 0.4-0.7 s, and nothing useful is ever said in under 0.8 s. Note this is a
+  // BUTTON-HOLD threshold, deliberately not AudioCapture::tooShort(), which
+  // only triggers below 1/3 s and would let a tap through as a recording.
+  static constexpr unsigned long kClickMaxMs = 800;
   static constexpr unsigned long kListRefreshMs = 5UL * 60UL * 1000UL;
 
   const VoiceMemoConfig config_;
@@ -96,6 +103,7 @@ class VoiceMemoApp {
   bool          busy_;
   bool          lastRawButton_;
   bool          stableButton_;
+  unsigned long pressStartMs_ = 0;
 
   // Selection cursor for the non-touch panels. -1 = nothing selected, which is
   // the state the device boots into so a stray KEY0 click cannot complete a
@@ -122,6 +130,10 @@ class VoiceMemoApp {
   UiStatus currentStatus(bool processing);
 
   void pollButton();
+  // Ends a recording without uploading it -- used when a press turns out to
+  // have been a click. The next startRecord() resets the buffer, so the
+  // captured samples need no explicit discard.
+  void abortRecording();
   void pollNavButtons();
   void pollTouch();
   // Moves the selection cursor by delta over the visible cards, clamping at

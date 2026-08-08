@@ -52,6 +52,7 @@ enum class UiStringId {
   kSomeDay,        // due label when the entry has no due time
   kOverdue,        // due label when the entry is past due
   kNoSpeech,       // placeholder memo when speech was not recognized
+  kHintPickFirst,  // KEY0 clicked with no card selected
   kCount
 };
 
@@ -71,6 +72,7 @@ inline const char* uiStrEn(UiStringId id) {
     case UiStringId::kSomeDay:      return "Some day";
     case UiStringId::kOverdue:      return "Overdue";
     case UiStringId::kNoSpeech:     return "No speech recognized.";
+    case UiStringId::kHintPickFirst: return "Pick a reminder with KEY2 / KEY1 first, then click KEY0.";
     default:                        return "";
   }
 }
@@ -91,6 +93,7 @@ inline const char* uiStrZh(UiStringId id) {
     case UiStringId::kSomeDay:      return "某天";
     case UiStringId::kOverdue:      return "已逾期";
     case UiStringId::kNoSpeech:     return "未识别到语音";
+    case UiStringId::kHintPickFirst: return "先用 KEY2 / KEY1 选中一条  再按 KEY0";
     default:                        return "";
   }
 }
@@ -111,6 +114,7 @@ inline const char* uiStrPt(UiStringId id) {
     case UiStringId::kSomeDay:      return "Algum dia";
     case UiStringId::kOverdue:      return "Atrasado";
     case UiStringId::kNoSpeech:     return "Nada reconhecido.";
+    case UiStringId::kHintPickFirst: return "Escolha um lembrete com KEY2 / KEY1 e depois clique no KEY0.";
     default:                        return "";
   }
 }

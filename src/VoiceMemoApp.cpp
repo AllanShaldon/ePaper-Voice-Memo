@@ -195,16 +195,8 @@ void VoiceMemoApp::stopRecording(bool forced)
                  static_cast<unsigned>(audio_.audioBytes()));
 
   if (audio_.tooShort()) {
-    // A press too short to be speech is treated as a CLICK, which is the only
-    // gesture the non-touch panels have left: it completes the selected card.
-    // Falls back to the old "hold it longer" hint when nothing is selected,
-    // so the click still teaches the user what to do.
+    drawTodoList(uiStr(UiStringId::kHintTooShort), false, false);
     busy_ = false;
-    if (selectedIndex_ >= 0) {
-      toggleSelected();
-    } else {
-      drawTodoList(uiStr(UiStringId::kHintTooShort), false, false);
-    }
     return;
   }
 
@@ -284,8 +276,21 @@ void VoiceMemoApp::pollButton()
   }
   if ((millis() - debounceMs_) > kDebounceDelayMs && rawButton != stableButton_) {
     stableButton_ = rawButton;
-    if (stableButton_ == LOW) startRecording();
-    else                      stopRecording(false);
+    if (stableButton_ == LOW) {
+      pressStartMs_ = millis();
+      startRecording();
+    } else {
+      // Classify by how long KEY0 was held, not by how much audio arrived.
+      // Recording starts on the press edge either way, so a real memo never
+      // loses its opening syllable; a click just throws those samples away.
+      const unsigned long held = millis() - pressStartMs_;
+      if (held < kClickMaxMs) {
+        abortRecording();
+        toggleSelected();
+      } else {
+        stopRecording(false);
+      }
+    }
   }
 }
 
@@ -314,7 +319,11 @@ void VoiceMemoApp::moveSelection(int delta)
 void VoiceMemoApp::toggleSelected()
 {
   if (recording_ || busy_) return;
-  if (selectedIndex_ < 0 || selectedIndex_ >= static_cast<int>(store_.count())) return;
+  if (selectedIndex_ < 0 || selectedIndex_ >= static_cast<int>(store_.count())) {
+    // A click with nothing selected would look broken. Say what to do instead.
+    drawTodoList(uiStr(UiStringId::kHintPickFirst), false, false);
+    return;
+  }
 
   const time_t now = rtc_.nowEpoch();
   store_.toggleDone(static_cast<size_t>(selectedIndex_), now);
@@ -325,6 +334,14 @@ void VoiceMemoApp::toggleSelected()
   // it silently follow the row that slid into place.
   selectedIndex_ = -1;
   drawTodoList(uiStr(UiStringId::kHintAdd), false, false);
+}
+
+void VoiceMemoApp::abortRecording()
+{
+  if (!recording_) return;
+  recording_ = false;
+  ledOff();
+  Serial1.println("[rec] abortado: clique, nao gravacao");
 }
 
 void VoiceMemoApp::pollNavButtons()
