@@ -50,6 +50,21 @@ const char* kMonthShort[]   = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
                                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
 #endif
 
+// Ink that stays legible on a given card fill. On a 4-gray panel the range is
+// so small that a dark card drawn with dark text is effectively blank -- which
+// is exactly how an overdue reminder rendered before this existed.
+uint16_t inkOn(uint16_t fill)
+{
+#if VM_SCREEN_MODE == VM_SCREEN_GRAY4
+  return (fill == TFT_GRAY_0 || fill == TFT_GRAY_1) ? kUiTextInv : kUiText;
+#elif VM_SCREEN_MODE == VM_SCREEN_COLOR6
+  return (fill == TFT_BLACK || fill == TFT_RED || fill == TFT_BLUE)
+             ? kUiTextInv : kUiText;
+#else
+  return (fill <= TFT_GRAY_5) ? kUiTextInv : kUiText;
+#endif
+}
+
 }  // namespace
 
 MemoUI::MemoUI()
@@ -428,13 +443,13 @@ void MemoUI::drawCompactCard(int x, int y, int w, int h,
   uint16_t fg;
   if (entry.done) {
     fill = kUiCardDone;
-    fg   = kUiMuted;
+    fg   = kUiMuted;          // faded on purpose; the strikethrough carries it
   } else if (entry.hasDue && nowEpoch > 0 && entry.dueEpoch < nowEpoch) {
     fill = kUiCardDark;
-    fg   = kUiText;
+    fg   = inkOn(fill);       // light ink: an overdue card is a dark card
   } else {
     fill = kUiCard;
-    fg   = kUiText;
+    fg   = inkOn(fill);
   }
   const bool overdue = (fill == kUiCardDark);
 
@@ -474,7 +489,8 @@ void MemoUI::drawCompactCard(int x, int y, int w, int h,
                              : (entry.done ? kUiMuted : kUiBadge);
   display_.fillRoundRect(chipX, chipY, chipW, chipH, 4, chipFill);
   renderer_.drawText(dateChip, chipX + chipW / 2, chipY + chipH / 2,
-                     chipSize, TextAlign::MiddleCenter, kUiText, chipFill);
+                     chipSize, TextAlign::MiddleCenter, inkOn(chipFill),
+                     chipFill);
 
   if (timeBig.length() > 0) {
     renderer_.drawText(timeBig, rightEdge, y + h - 8, 2,

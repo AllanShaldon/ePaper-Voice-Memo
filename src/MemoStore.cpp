@@ -3,6 +3,7 @@
 #include <Preferences.h>
 
 #include "DisplayText.h"
+#include "DonePolicy.h"
 #include "MemoReplacePolicy.h"
 #include "UiLang.h"
 
@@ -289,16 +290,13 @@ bool MemoStore::toggleDone(size_t i, time_t now)
 
 bool MemoStore::purgeExpiredDone(time_t now)
 {
-  // A zero/absent clock must never purge: before the RTC is sane, `now` can be
-  // small enough that (now - doneAt) looks huge and would wipe fresh entries.
-  if (now <= 0) return false;
-
   size_t out = 0;
   bool removed = false;
   for (size_t i = 0; i < count_; i++) {
     const MemoEntry& e = items_[i];
-    const bool expired = e.done && e.doneAt > 0 &&
-                         (now - e.doneAt) >= kDoneTtlSeconds;
+    // The rule itself lives in DonePolicy.h so it can be unit-tested without
+    // hardware -- see test/test_done_policy.
+    const bool expired = vmDoneExpired(e.done, e.doneAt, now, kDoneTtlSeconds);
     if (expired) {
       removed = true;
       continue;

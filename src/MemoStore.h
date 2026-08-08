@@ -33,6 +33,8 @@
 #include <Arduino.h>
 #include <time.h>
 
+#include "DonePolicy.h"
+
 struct MemoEntry {
   String text;        // one reminder sentence, in the firmware's UI language
   String fuzzyLabel;  // optional short label like "Tonight", "Tmrw AM"; "" = precise time
@@ -50,10 +52,9 @@ class MemoStore {
  public:
   static constexpr size_t kMax = 8;
 
-  // How long a completed reminder lingers before it is purged. 12 h is long
-  // enough that a morning task checked off still shows "done" all day, and
-  // short enough that the list clears itself overnight without user action.
-  static constexpr time_t kDoneTtlSeconds = 12 * 60 * 60;
+  // How long a completed reminder lingers before it is purged. The value and
+  // the expiry rule live in DonePolicy.h, which is unit-tested.
+  static constexpr time_t kDoneTtlSeconds = kVmDoneTtlSeconds;
 
   MemoStore();
 
