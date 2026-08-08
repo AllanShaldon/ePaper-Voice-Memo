@@ -1,5 +1,7 @@
 #include "VoiceMemoApp.h"
 
+#include "AlarmPolicy.h"
+
 #include <WiFi.h>
 
 #include "BatteryMath.h"
@@ -170,6 +172,17 @@ void VoiceMemoApp::begin()
 #endif
 
   store_.begin();
+
+  // Seed the alarm watermark. A device powering up next to a list of already
+  // overdue reminders must not play every one of them back at once, so when
+  // nothing was ever stored we start from "now" and only announce what comes
+  // due from here on.
+  alertWatermark_ = store_.alertWatermark();
+  if (alertWatermark_ <= 0) {
+    alertWatermark_ = rtc_.nowEpoch();
+    store_.setAlertWatermark(alertWatermark_);
+  }
+
   stt_.configure(config_.speech, config_.httpTimeoutMs);
   memo_.configure(config_.memo,  config_.httpTimeoutMs);
   quote_.configure(config_.memo, config_.httpTimeoutMs);
@@ -400,6 +413,57 @@ void VoiceMemoApp::abortRecording()
   Serial1.println("[rec] abortado: clique, nao gravacao");
 }
 
+void VoiceMemoApp::chimeDue()
+{
+  // Three rising notes: short enough not to stall the loop for long, and
+  // distinct from the single flat beep that marks the start of a recording,
+  // so the two are not confused across the room.
+  static const int kNotes[] = {2000, 2600, 3200};
+  for (int i = 0; i < 3; i++) {
+    tone(kBuzzerPin, kNotes[i], 140);
+    delay(190);
+  }
+  noTone(kBuzzerPin);
+}
+
+void VoiceMemoApp::pollDueAlarm()
+{
+  // Never interrupt a recording: the buzzer sits next to the microphone and
+  // would land straight in the audio being uploaded.
+  if (recording_ || busy_) return;
+
+  const unsigned long nowMs = millis();
+  if (nowMs - lastAlarmScanMs_ < kAlarmScanMs) return;
+  lastAlarmScanMs_ = nowMs;
+
+  const time_t now = rtc_.nowEpoch();
+  if (now <= 0) return;
+
+  int rang = 0;
+  for (size_t i = 0; i < store_.count(); i++) {
+    const MemoEntry& e = store_.at(i);
+    if (vmShouldAlert(e.hasDue, e.done, e.dueEpoch, alertWatermark_, now)) {
+      Serial1.printf("[alarme] venceu: \"%s\"\n", e.text.c_str());
+      rang++;
+    }
+  }
+
+  // One chime per scan, however many came due together: five reminders at the
+  // same minute should sound like one alarm, not five.
+  if (rang > 0) {
+    chimeDue();
+    listDirty_ = true;          // the card just became "Atrasado" on screen
+    pendingFullRefresh_ = true;
+    lastNavMs_ = nowMs;
+  }
+
+  const time_t next = vmNextWatermark(now, alertWatermark_);
+  if (next != alertWatermark_) {
+    alertWatermark_ = next;
+    store_.setAlertWatermark(alertWatermark_);
+  }
+}
+
 void VoiceMemoApp::flushPendingRedraw()
 {
   if (!listDirty_) return;
@@ -486,6 +550,7 @@ void VoiceMemoApp::loop()
   pollButton();
   captureChunk();
   pollNavButtons();
+  pollDueAlarm();
   flushPendingRedraw();
   pollTouch();
   pollScheduledRefresh();

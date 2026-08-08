@@ -124,6 +124,12 @@ class VoiceMemoApp {
   // Set when the cursor moved but the panel has not been repainted yet.
   bool          listDirty_ = false;
   unsigned long lastNavMs_ = 0;
+  // Last time the due-reminder scan ran, and the persisted watermark it
+  // advances. Scanning is cheap; ringing is not, so the scan is throttled
+  // rather than the ring.
+  unsigned long lastAlarmScanMs_ = 0;
+  time_t        alertWatermark_ = 0;
+  static constexpr unsigned long kAlarmScanMs = 5000;
   bool          pendingHintPickFirst_ = false;
   // Set when the pending repaint must be a full pass -- any change to the
   // reminders themselves, as opposed to just moving the cursor. Card content
@@ -171,6 +177,11 @@ class VoiceMemoApp {
   void moveSelection(int delta);
   // Keeps scrollOffset_ inside the list and the selection inside the window.
   void clampScroll();
+  // Sounds the buzzer for reminders that came due since the last scan, and
+  // marks the list for repaint (a due reminder becomes "Atrasado" on screen).
+  void pollDueAlarm();
+  // Buzzer pattern for "a reminder just came due".
+  void chimeDue();
   // Repaints the list once the navigation keys have settled. Called from
   // loop() so a burst of presses costs one refresh instead of one each.
   void flushPendingRedraw();

@@ -13,6 +13,7 @@ namespace {
 constexpr const char* kNvsNamespace = "vmm";
 constexpr const char* kNvsKey       = "items";
 constexpr const char* kNvsLangKey   = "lang";
+constexpr const char* kNvsAlertKey  = "alertw";
 
 constexpr uint8_t kFlagHasDue = 0x01;
 constexpr uint8_t kFlagDone   = 0x02;
@@ -300,6 +301,24 @@ bool MemoStore::purgeExpiredDone(time_t now)
   count_ = out;
   save();
   return true;
+}
+
+time_t MemoStore::alertWatermark() const
+{
+  Preferences prefs;
+  if (!prefs.begin(kNvsNamespace, /*readOnly=*/true)) return 0;
+  const int64_t v = prefs.getLong64(kNvsAlertKey, 0);
+  prefs.end();
+  return static_cast<time_t>(v);
+}
+
+bool MemoStore::setAlertWatermark(time_t epoch)
+{
+  Preferences prefs;
+  if (!prefs.begin(kNvsNamespace, /*readOnly=*/false)) return false;
+  const size_t n = prefs.putLong64(kNvsAlertKey, static_cast<int64_t>(epoch));
+  prefs.end();
+  return n > 0;
 }
 
 bool MemoStore::clear()

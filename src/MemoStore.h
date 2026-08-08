@@ -92,6 +92,13 @@ class MemoStore {
   // Removes every entry and clears NVS. Useful for "factory reset" hooks.
   bool clear();
 
+  // "Reminders due up to this instant have already been announced." Persisted
+  // beside the list so a reboot does not replay every past alarm. Returns 0
+  // when nothing was ever stored, which the caller seeds with the current
+  // clock rather than firing the whole backlog.
+  time_t alertWatermark() const;
+  bool   setAlertWatermark(time_t epoch);
+
   size_t           count() const { return count_; }
   const MemoEntry& at(size_t i) const { return items_[i]; }
 
