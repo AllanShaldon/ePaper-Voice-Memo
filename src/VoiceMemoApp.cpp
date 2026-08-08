@@ -76,7 +76,8 @@ void VoiceMemoApp::drawTodoList(const String& hint, bool processing,
   // Partial refresh is a 1 bpp-only path, and it accumulates residue, so it is
   // used for cursor movement and given up periodically for a clean full pass.
   bool usePartial = partial && MemoUI::supportsPartial();
-  if (usePartial && partialsSinceFull_ >= kMaxPartialsBeforeFull) {
+  if (usePartial && kMaxPartialsBeforeFull > 0 &&
+      partialsSinceFull_ >= kMaxPartialsBeforeFull) {
     usePartial = false;
   }
   partialsSinceFull_ = usePartial ? (partialsSinceFull_ + 1) : 0;
@@ -177,7 +178,7 @@ void VoiceMemoApp::begin()
   ui_.drawBoot(rtc_, uiStr(UiStringId::kBootWifi), currentStatus(false));
   ensureWiFi(15000);
 
-  drawTodoList(uiStr(UiStringId::kHintAdd), false, true);
+  drawTodoList(uiStr(UiStringId::kHintAdd), false, true, /*partial=*/true);
 }
 
 void VoiceMemoApp::startRecording()
@@ -466,7 +467,7 @@ void VoiceMemoApp::pollScheduledRefresh()
       || now - debounceMs_ <= kDebounceDelayMs;
   if (key0MayBeActive) return;
 
-  drawTodoList(uiStr(UiStringId::kHintAdd), false, true);
+  drawTodoList(uiStr(UiStringId::kHintAdd), false, true, /*partial=*/true);
 }
 
 void VoiceMemoApp::loop()

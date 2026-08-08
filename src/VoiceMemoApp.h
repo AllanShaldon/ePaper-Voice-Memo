@@ -133,11 +133,12 @@ class VoiceMemoApp {
   // e-paper leave residue behind, so a full pass is forced periodically to
   // clear it -- otherwise the panel slowly turns muddy.
   int           partialsSinceFull_ = 0;
-  // Lowered from 12 after seeing the residue on the panel: partial refresh
-  // does not reseat every particle, so dirt accumulates faster than the
-  // library's own examples suggest. 5 keeps the panel clean without giving
-  // up the responsiveness that made mono worth trying.
-  static constexpr int kMaxPartialsBeforeFull = 5;
+  // 0 disables the periodic cleaning pass entirely: every repaint stays on
+  // the fast single-pass waveform and residue is allowed to accumulate. This
+  // is deliberately an experiment -- we want to see how bad the panel gets
+  // over a full day of use before choosing a cleaning interval. Set this to a
+  // positive number to force a full pass every N partial refreshes.
+  static constexpr int kMaxPartialsBeforeFull = 0;
   // Debounce state for the two navigation keys, same shape as KEY0's.
   bool          lastRawKey1_ = HIGH;
   bool          stableKey1_  = HIGH;

@@ -790,10 +790,11 @@ void MemoUI::drawTodoList(MemoStore& store, RtcClock& rtc,
   }
 #if VM_SCREEN_MODE == VM_SCREEN_MONO
   if (partial) {
-    // Only the card area changes when the cursor moves; the header clock and
-    // the footer quote do not. Refreshing just that band uses the fast
-    // single-pass waveform, so it does not flash.
-    display_.updataPartial(0, listTop - 12, w, (listBottom - listTop) + 16);
+    // Whole panel, fast waveform. The area matters far less than the waveform
+    // here, and covering everything means the header clock refreshes on the
+    // same path -- otherwise the clock would be the one thing still forcing a
+    // multi-pass update every five minutes.
+    display_.updataPartial(0, 0, w, h);
   } else {
     display_.update();
   }
