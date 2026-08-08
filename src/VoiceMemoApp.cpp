@@ -374,11 +374,22 @@ void VoiceMemoApp::toggleSelected()
   store_.toggleDone(static_cast<size_t>(selectedIndex_), now);
   Serial1.printf("[nav] concluido toggle linha %d\n", selectedIndex_);
 
-  // The card jumps to the bottom on the next sort, so the highlight would end
-  // up pointing at a different reminder. Drop the selection instead of letting
-  // it silently follow the row that slid into place.
-  selectedIndex_ = -1;
-  drawTodoList(uiStr(UiStringId::kHintAdd), false, false);
+  // The card jumps to the bottom (or back up) on the next sort, so keeping the
+  // index would silently point the cursor at whatever slid into place. Parking
+  // it on the first item keeps it visible and gives a predictable place to
+  // continue from -- clearing it made the cursor vanish, which reads as the UI
+  // losing your place.
+  selectedIndex_ = (store_.count() > 0) ? 0 : -1;
+  scrollOffset_ = 0;
+  clampScroll();
+
+  // Repaint through the pending path so a toggle followed by more key presses
+  // still costs one refresh. Full pass, not partial: the card's own content
+  // changed, which is the worst case for e-paper residue -- and the user
+  // reports the pause here reads as deliberate, not as lag.
+  listDirty_ = true;
+  pendingFullRefresh_ = true;
+  lastNavMs_ = millis();
 }
 
 void VoiceMemoApp::abortRecording()
