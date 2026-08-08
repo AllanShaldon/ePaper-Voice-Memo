@@ -71,8 +71,16 @@ UiStatus VoiceMemoApp::currentStatus(bool processing)
 }
 
 void VoiceMemoApp::drawTodoList(const String& hint, bool processing,
-                                bool allowQuoteNetwork)
+                                bool allowQuoteNetwork, bool partial)
 {
+  // Partial refresh is a 1 bpp-only path, and it accumulates residue, so it is
+  // used for cursor movement and given up periodically for a clean full pass.
+  bool usePartial = partial && MemoUI::supportsPartial();
+  if (usePartial && partialsSinceFull_ >= kMaxPartialsBeforeFull) {
+    usePartial = false;
+  }
+  partialsSinceFull_ = usePartial ? (partialsSinceFull_ + 1) : 0;
+
   const time_t nowEpoch = rtc_.nowEpoch();
   // Completed reminders age out on their own after kDoneTtlSeconds. Doing it
   // here means every redraw is also a garbage-collection tick, so nothing
@@ -85,7 +93,7 @@ void VoiceMemoApp::drawTodoList(const String& hint, bool processing,
   }
   quote_.refreshIfNeeded(nowEpoch, quoteNetworkReady);
   ui_.drawTodoList(store_, rtc_, currentStatus(processing), hint, quote_.quote(),
-                   selectedIndex_, scrollOffset_);
+                   selectedIndex_, scrollOffset_, usePartial);
   lastListRefreshMs_ = millis();
 }
 
@@ -384,7 +392,8 @@ void VoiceMemoApp::flushPendingRedraw()
   pendingHintPickFirst_ = false;
   listDirty_ = false;
   drawTodoList(uiStr(pick ? UiStringId::kHintPickFirst
-                          : UiStringId::kHintAdd), false, false);
+                          : UiStringId::kHintAdd), false, false,
+               /*partial=*/true);
 }
 
 void VoiceMemoApp::pollNavButtons()

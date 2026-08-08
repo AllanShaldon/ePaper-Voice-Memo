@@ -60,7 +60,13 @@ class MemoUI {
                     const String& hint,
                     const String& quote,
                     int selectedIndex = -1,
-                    int scrollOffset = 0);
+                    int scrollOffset = 0,
+                    bool partial = false);
+
+  // True when this build can refresh a region instead of the whole panel.
+  // Only the 1 bpp pipeline can: EPaper::updataPartial() reads the buffer at
+  // stride = width/8, which a 4 bpp gray buffer does not satisfy.
+  static bool supportsPartial();
 
   // One-page boot/splash screen reusing the header.
   void drawBoot(RtcClock& rtc, const String& statusText, const UiStatus& status);

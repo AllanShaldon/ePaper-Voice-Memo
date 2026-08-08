@@ -18,6 +18,18 @@ constexpr uint16_t kUiTextInv  = TFT_GRAY_3;
 constexpr uint16_t kUiMuted    = TFT_GRAY_1;
 constexpr uint16_t kUiLine     = TFT_GRAY_1;
 constexpr uint16_t kUiBadge    = TFT_GRAY_2;
+#elif VM_SCREEN_MODE == VM_SCREEN_MONO
+// One bit per pixel: every "shade" has to come from layout, not from ink.
+// Cards are outlined instead of filled, and an overdue card inverts.
+constexpr uint16_t kUiBg       = TFT_WHITE;
+constexpr uint16_t kUiCard     = TFT_WHITE;   // outlined, see drawCompactCard
+constexpr uint16_t kUiCardDark = TFT_BLACK;   // overdue inverts
+constexpr uint16_t kUiCardDone = TFT_WHITE;
+constexpr uint16_t kUiText     = TFT_BLACK;
+constexpr uint16_t kUiTextInv  = TFT_WHITE;
+constexpr uint16_t kUiMuted    = TFT_BLACK;
+constexpr uint16_t kUiLine     = TFT_BLACK;
+constexpr uint16_t kUiBadge    = TFT_BLACK;
 #elif VM_SCREEN_MODE == VM_SCREEN_COLOR6
 constexpr uint16_t kUiBg       = TFT_WHITE;
 constexpr uint16_t kUiCard     = TFT_YELLOW;
@@ -55,7 +67,9 @@ const char* kMonthShort[]   = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
 // is exactly how an overdue reminder rendered before this existed.
 uint16_t inkOn(uint16_t fill)
 {
-#if VM_SCREEN_MODE == VM_SCREEN_GRAY4
+#if VM_SCREEN_MODE == VM_SCREEN_MONO
+  return (fill == TFT_BLACK) ? kUiTextInv : kUiText;
+#elif VM_SCREEN_MODE == VM_SCREEN_GRAY4
   return (fill == TFT_GRAY_0 || fill == TFT_GRAY_1) ? kUiTextInv : kUiText;
 #elif VM_SCREEN_MODE == VM_SCREEN_COLOR6
   return (fill == TFT_BLACK || fill == TFT_RED || fill == TFT_BLUE)
@@ -77,12 +91,24 @@ MemoUI::MemoUI()
 void MemoUI::begin()
 {
   display_.begin();
-#if VM_SCREEN_MODE == VM_SCREEN_GRAY4
+#if VM_SCREEN_MODE == VM_SCREEN_MONO
+  // No initGrayMode: the 1 bpp buffer begin() sets up is what the partial
+  // refresh path expects.
+#elif VM_SCREEN_MODE == VM_SCREEN_GRAY4
   display_.initGrayMode(GRAY_LEVEL4);
 #elif VM_SCREEN_MODE == VM_SCREEN_GRAY16
   display_.initGrayMode(GRAY_LEVEL16);
 #endif
   renderer_.begin(display_);
+}
+
+bool MemoUI::supportsPartial()
+{
+#if VM_SCREEN_MODE == VM_SCREEN_MONO
+  return true;
+#else
+  return false;
+#endif
 }
 
 uint16_t MemoUI::displayWidth()  { return static_cast<uint16_t>(display_.width()); }
@@ -456,6 +482,11 @@ void MemoUI::drawCompactCard(int x, int y, int w, int h,
   const bool overdue = (fill == kUiCardDark);
 
   display_.fillRoundRect(x, y, w, h, 6, fill);
+#if VM_SCREEN_MODE == VM_SCREEN_MONO
+  // A white card on a white page is invisible, so give it an edge. The
+  // overdue card is solid black and needs none.
+  if (!overdue) display_.drawRoundRect(x, y, w, h, 6, kUiLine);
+#endif
 
   const int boxSize = 22;
   const int boxCx = x + 12 + boxSize / 2;
@@ -537,8 +568,16 @@ void MemoUI::drawCompactCard(int x, int y, int w, int h,
   // single 1 px rounded rect is easy to lose against the card fill on a
   // 4-gray e-paper panel.
   if (selected) {
+#if VM_SCREEN_MODE == VM_SCREEN_MONO
+    // Every card already has a 1 px edge here, so the cursor needs a
+    // different weight, not the same line drawn twice: a solid bar down the
+    // left side reads at a glance and cannot be confused with the border.
+    display_.fillRect(x + 2, y + 3, 4, h - 6, kUiLine);
+    display_.drawRoundRect(x + 1, y + 1, w - 2, h - 2, 6, kUiLine);
+#else
     display_.drawRoundRect(x, y, w, h, 6, kUiText);
     display_.drawRoundRect(x + 1, y + 1, w - 2, h - 2, 6, kUiText);
+#endif
   }
 }
 
@@ -640,7 +679,7 @@ void MemoUI::drawBoot(RtcClock& rtc, const String& statusText, const UiStatus& s
 void MemoUI::drawTodoList(MemoStore& store, RtcClock& rtc,
                           const UiStatus& status, const String& hint,
                           const String& quote, int selectedIndex,
-                          int scrollOffset)
+                          int scrollOffset, bool partial)
 {
   const time_t nowEpoch = rtc.nowEpoch();
   // Sort on EVERY panel. This used to be fenced behind VM_SCREEN_GRAY16, so
@@ -749,7 +788,19 @@ void MemoUI::drawTodoList(MemoStore& store, RtcClock& rtc,
   if (quote.length() > 0) {
     drawWrappedRight(quote, w - margin, h - 8, w / 2, 16, 1, kUiMuted, 1);
   }
+#if VM_SCREEN_MODE == VM_SCREEN_MONO
+  if (partial) {
+    // Only the card area changes when the cursor moves; the header clock and
+    // the footer quote do not. Refreshing just that band uses the fast
+    // single-pass waveform, so it does not flash.
+    display_.updataPartial(0, listTop - 12, w, (listBottom - listTop) + 16);
+  } else {
+    display_.update();
+  }
+#else
+  (void)partial;   // gray pipeline has no partial path -- see driver.h
   display_.update();
+#endif
 #endif
 }
 

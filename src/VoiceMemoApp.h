@@ -125,6 +125,11 @@ class VoiceMemoApp {
   bool          listDirty_ = false;
   unsigned long lastNavMs_ = 0;
   bool          pendingHintPickFirst_ = false;
+  // Consecutive partial refreshes since the last full one. Partial updates on
+  // e-paper leave residue behind, so a full pass is forced periodically to
+  // clear it -- otherwise the panel slowly turns muddy.
+  int           partialsSinceFull_ = 0;
+  static constexpr int kMaxPartialsBeforeFull = 12;
   // Debounce state for the two navigation keys, same shape as KEY0's.
   bool          lastRawKey1_ = HIGH;
   bool          stableKey1_  = HIGH;
@@ -166,7 +171,8 @@ class VoiceMemoApp {
   void startRecording();
   void stopRecording(bool forced);
   void captureChunk();
-  void drawTodoList(const String& hint, bool processing, bool allowQuoteNetwork);
+  void drawTodoList(const String& hint, bool processing, bool allowQuoteNetwork,
+                    bool partial = false);
 };
 
 #endif  // VOICE_MEMO_APP_H
