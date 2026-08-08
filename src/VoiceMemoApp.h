@@ -85,6 +85,15 @@ class VoiceMemoApp {
   // BUTTON-HOLD threshold, deliberately not AudioCapture::tooShort(), which
   // only triggers below 1/3 s and would let a tap through as a recording.
   static constexpr unsigned long kClickMaxMs = 800;
+
+  // How long the navigation keys must be quiet before the list is redrawn.
+  // A full gray refresh on this panel takes seconds and blocks the loop, so
+  // drawing on every keypress means the 2nd and 3rd press land while nothing
+  // is polling and are simply lost. Moving the cursor is cheap; only the
+  // repaint is expensive, so presses are absorbed first and painted once.
+  // 250 ms is under the gap between deliberate presses and far above the
+  // 35 ms debounce.
+  static constexpr unsigned long kNavSettleMs = 250;
   static constexpr unsigned long kListRefreshMs = 5UL * 60UL * 1000UL;
 
   const VoiceMemoConfig config_;
@@ -112,6 +121,10 @@ class VoiceMemoApp {
   // First list index drawn on screen. The panel shows VM_VISIBLE_MEMO_MAX
   // cards at a time while the store holds MemoStore::kMax.
   int           scrollOffset_ = 0;
+  // Set when the cursor moved but the panel has not been repainted yet.
+  bool          listDirty_ = false;
+  unsigned long lastNavMs_ = 0;
+  bool          pendingHintPickFirst_ = false;
   // Debounce state for the two navigation keys, same shape as KEY0's.
   bool          lastRawKey1_ = HIGH;
   bool          stableKey1_  = HIGH;
@@ -144,6 +157,9 @@ class VoiceMemoApp {
   void moveSelection(int delta);
   // Keeps scrollOffset_ inside the list and the selection inside the window.
   void clampScroll();
+  // Repaints the list once the navigation keys have settled. Called from
+  // loop() so a burst of presses costs one refresh instead of one each.
+  void flushPendingRedraw();
   // Completes / un-completes the selected card. No-op when nothing is selected.
   void toggleSelected();
   void pollScheduledRefresh();

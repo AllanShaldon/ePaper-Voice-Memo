@@ -317,7 +317,11 @@ void VoiceMemoApp::moveSelection(int delta)
   clampScroll();
   Serial1.printf("[nav] selecao=%d de %d (janela em %d)\n",
                  selectedIndex_, n, scrollOffset_);
-  drawTodoList(uiStr(UiStringId::kHintAdd), false, false);
+  // Do NOT repaint here: a burst of presses would each block on a multi-second
+  // refresh and the later ones would be dropped. flushPendingRedraw() paints
+  // once the keys go quiet.
+  listDirty_ = true;
+  lastNavMs_ = millis();
 }
 
 void VoiceMemoApp::clampScroll()
@@ -345,7 +349,9 @@ void VoiceMemoApp::toggleSelected()
   if (recording_ || busy_) return;
   if (selectedIndex_ < 0 || selectedIndex_ >= static_cast<int>(store_.count())) {
     // A click with nothing selected would look broken. Say what to do instead.
-    drawTodoList(uiStr(UiStringId::kHintPickFirst), false, false);
+    pendingHintPickFirst_ = true;
+    listDirty_ = true;
+    lastNavMs_ = millis();
     return;
   }
 
@@ -366,6 +372,19 @@ void VoiceMemoApp::abortRecording()
   recording_ = false;
   ledOff();
   Serial1.println("[rec] abortado: clique, nao gravacao");
+}
+
+void VoiceMemoApp::flushPendingRedraw()
+{
+  if (!listDirty_) return;
+  if (recording_ || busy_) return;
+  if (millis() - lastNavMs_ < kNavSettleMs) return;
+
+  const bool pick = pendingHintPickFirst_;
+  pendingHintPickFirst_ = false;
+  listDirty_ = false;
+  drawTodoList(uiStr(pick ? UiStringId::kHintPickFirst
+                          : UiStringId::kHintAdd), false, false);
 }
 
 void VoiceMemoApp::pollNavButtons()
@@ -438,6 +457,7 @@ void VoiceMemoApp::loop()
   pollButton();
   captureChunk();
   pollNavButtons();
+  flushPendingRedraw();
   pollTouch();
   pollScheduledRefresh();
 }
