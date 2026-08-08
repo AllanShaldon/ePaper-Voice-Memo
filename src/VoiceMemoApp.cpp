@@ -459,6 +459,23 @@ void VoiceMemoApp::pollDueAlarm()
     lastNavMs_ = nowMs;
   }
 
+  // Housekeeping on the same 5 s tick: a completed reminder is purged during a
+  // repaint, so without this it would survive until the next scheduled refresh
+  // -- which is itself 5 minutes, i.e. it would roughly double the time the
+  // user actually observes. Only the cheap comparison runs here; marking the
+  // list dirty lets the existing path do the removal and the redraw.
+  if (rang == 0) {
+    for (size_t i = 0; i < store_.count(); i++) {
+      const MemoEntry& e = store_.at(i);
+      if (vmDoneExpired(e.done, e.doneAt, now, MemoStore::kDoneTtlSeconds)) {
+        listDirty_ = true;
+        pendingFullRefresh_ = true;   // a card is disappearing, not just moving
+        lastNavMs_ = nowMs;
+        break;
+      }
+    }
+  }
+
   const time_t next = vmNextWatermark(now, alertWatermark_);
   if (next != alertWatermark_) {
     alertWatermark_ = next;

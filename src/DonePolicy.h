@@ -12,10 +12,14 @@
 #include <stdbool.h>
 #include <time.h>
 
-// How long a completed reminder lingers before it is purged. 12 h is long
-// enough that a task checked off in the morning still shows as done all day,
-// and short enough that the list clears itself overnight with no user action.
-static const time_t kVmDoneTtlSeconds = 12 * 60 * 60;
+// How long a completed reminder lingers before it is purged. 5 min is long
+// enough to read as "I just did that" and see the strikethrough land, and
+// short enough that the list stays about what is still pending.
+//
+// Note this is short enough that the REDRAW cadence matters: the purge runs
+// during a repaint, so without a housekeeping tick the entry would survive
+// until the next scheduled refresh. See VoiceMemoApp::pollDueAlarm().
+static const time_t kVmDoneTtlSeconds = 5 * 60;
 
 // True when a completed reminder has outlived its grace period.
 //

@@ -1,7 +1,7 @@
 #include <unity.h>
 #include "DonePolicy.h"
 
-static const time_t kTtl = 12 * 60 * 60;   // 12 h
+static const time_t kTtl = 5 * 60;         // 5 min
 static const time_t kNow = 1786200000;     // arbitrary sane epoch
 
 void test_undone_never_expires()
@@ -50,9 +50,9 @@ void test_stamp_in_the_future_never_expires()
     TEST_ASSERT_FALSE(vmDoneExpired(true, kNow + 3600, kNow, kTtl));
 }
 
-void test_ttl_is_twelve_hours()
+void test_ttl_is_five_minutes()
 {
-    TEST_ASSERT_EQUAL_INT(43200, (int)kVmDoneTtlSeconds);
+    TEST_ASSERT_EQUAL_INT(300, (int)kVmDoneTtlSeconds);
 }
 
 int main(int, char**)
@@ -66,6 +66,6 @@ int main(int, char**)
     RUN_TEST(test_missing_stamp_never_expires);
     RUN_TEST(test_invalid_clock_never_expires);
     RUN_TEST(test_stamp_in_the_future_never_expires);
-    RUN_TEST(test_ttl_is_twelve_hours);
+    RUN_TEST(test_ttl_is_five_minutes);
     return UNITY_END();
 }
