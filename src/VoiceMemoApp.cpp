@@ -415,11 +415,13 @@ void VoiceMemoApp::abortRecording()
 
 void VoiceMemoApp::chimeDue()
 {
-  // Three rising notes: short enough not to stall the loop for long, and
-  // distinct from the single flat beep that marks the start of a recording,
-  // so the two are not confused across the room.
-  static const int kNotes[] = {2000, 2600, 3200};
-  for (int i = 0; i < 3; i++) {
+  // Five rising notes. Three was distinct from the recording beep but passed
+  // too quickly to register from across the room -- an alarm has to survive
+  // not being listened for. Still under a second, so the loop stalls briefly
+  // and the buttons stay responsive.
+  static const int kNotes[] = {2000, 2400, 2800, 3200, 3600};
+  const int noteCount = static_cast<int>(sizeof(kNotes) / sizeof(kNotes[0]));
+  for (int i = 0; i < noteCount; i++) {
     tone(kBuzzerPin, kNotes[i], 140);
     delay(190);
   }
