@@ -461,6 +461,16 @@ void MemoUI::drawCard(int x, int y, int w, int h,
     drawWrapped(entry.text, memoX, y + 24, memoMaxW, memoLineH,
                 memoSize, fg, 2);
   }
+
+  // Selection cursor. This panel has touch, so the cursor is secondary here,
+  // but the parameter existed and drew nothing -- an invisible cursor is worse
+  // than none, because the keys still move it. Ink derives from the card fill
+  // so it survives the dark overdue card.
+  if (selected) {
+    const uint16_t cursorInk = inkOn(fill);
+    display_.fillRect(x + 6, y + 8, 6, h - 16, cursorInk);
+    display_.drawRoundRect(x + 2, y + 2, w - 4, h - 4, 14, cursorInk);
+  }
 }
 
 void MemoUI::drawCompactCard(int x, int y, int w, int h,
@@ -568,15 +578,19 @@ void MemoUI::drawCompactCard(int x, int y, int w, int h,
   // single 1 px rounded rect is easy to lose against the card fill on a
   // 4-gray e-paper panel.
   if (selected) {
+    // The cursor must contrast with the CARD, not with the page: an overdue
+    // card is solid dark, so drawing the cursor in the page's ink makes it
+    // vanish exactly on the reminder that most wants attention.
+    const uint16_t cursorInk = inkOn(fill);
 #if VM_SCREEN_MODE == VM_SCREEN_MONO
     // Every card already has a 1 px edge here, so the cursor needs a
     // different weight, not the same line drawn twice: a solid bar down the
     // left side reads at a glance and cannot be confused with the border.
-    display_.fillRect(x + 2, y + 3, 4, h - 6, kUiLine);
-    display_.drawRoundRect(x + 1, y + 1, w - 2, h - 2, 6, kUiLine);
+    display_.fillRect(x + 2, y + 3, 4, h - 6, cursorInk);
+    display_.drawRoundRect(x + 1, y + 1, w - 2, h - 2, 6, cursorInk);
 #else
-    display_.drawRoundRect(x, y, w, h, 6, kUiText);
-    display_.drawRoundRect(x + 1, y + 1, w - 2, h - 2, 6, kUiText);
+    display_.drawRoundRect(x, y, w, h, 6, cursorInk);
+    display_.drawRoundRect(x + 1, y + 1, w - 2, h - 2, 6, cursorInk);
 #endif
   }
 }
