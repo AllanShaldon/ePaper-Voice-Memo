@@ -125,11 +125,19 @@ class VoiceMemoApp {
   bool          listDirty_ = false;
   unsigned long lastNavMs_ = 0;
   bool          pendingHintPickFirst_ = false;
+  // Set when the pending repaint must be a full pass -- any change to the
+  // reminders themselves, as opposed to just moving the cursor. Card content
+  // changing under a partial refresh is the worst case for ghosting.
+  bool          pendingFullRefresh_ = false;
   // Consecutive partial refreshes since the last full one. Partial updates on
   // e-paper leave residue behind, so a full pass is forced periodically to
   // clear it -- otherwise the panel slowly turns muddy.
   int           partialsSinceFull_ = 0;
-  static constexpr int kMaxPartialsBeforeFull = 12;
+  // Lowered from 12 after seeing the residue on the panel: partial refresh
+  // does not reseat every particle, so dirt accumulates faster than the
+  // library's own examples suggest. 5 keeps the panel clean without giving
+  // up the responsiveness that made mono worth trying.
+  static constexpr int kMaxPartialsBeforeFull = 5;
   // Debounce state for the two navigation keys, same shape as KEY0's.
   bool          lastRawKey1_ = HIGH;
   bool          stableKey1_  = HIGH;

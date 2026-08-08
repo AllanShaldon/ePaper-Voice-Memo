@@ -85,7 +85,13 @@ void VoiceMemoApp::drawTodoList(const String& hint, bool processing,
   // Completed reminders age out on their own after kDoneTtlSeconds. Doing it
   // here means every redraw is also a garbage-collection tick, so nothing
   // lingers just because the user never pressed anything.
-  if (store_.purgeExpiredDone(nowEpoch)) selectedIndex_ = -1;
+  if (store_.purgeExpiredDone(nowEpoch)) {
+    // Same reasoning as toggleSelected(): entries disappeared under the
+    // cursor, so park it somewhere that certainly still exists rather than
+    // leaving it pointing at a row that is gone.
+    selectedIndex_ = (store_.count() > 0) ? 0 : -1;
+    scrollOffset_ = 0;
+  }
   clampScroll();
   bool quoteNetworkReady = false;
   if (allowQuoteNetwork && quote_.needsRefresh(nowEpoch)) {
@@ -389,11 +395,13 @@ void VoiceMemoApp::flushPendingRedraw()
   if (millis() - lastNavMs_ < kNavSettleMs) return;
 
   const bool pick = pendingHintPickFirst_;
+  const bool full = pendingFullRefresh_;
   pendingHintPickFirst_ = false;
+  pendingFullRefresh_ = false;
   listDirty_ = false;
   drawTodoList(uiStr(pick ? UiStringId::kHintPickFirst
                           : UiStringId::kHintAdd), false, false,
-               /*partial=*/true);
+               /*partial=*/!full);
 }
 
 void VoiceMemoApp::pollNavButtons()
