@@ -88,7 +88,11 @@ const char* DailyQuoteClient::fallbackQuote()
 #if VM_LANG_ZH
   return "今天也要稳稳发光 哪怕只是省电模式";
 #else
+  #if VM_LANG_PT
+  return "Pequenos passos contam, ainda mais quando cabem no e-paper.";
+#else
   return "Tiny steps count, especially when they fit on e-paper.";
+#endif
 #endif
 }
 
@@ -99,9 +103,9 @@ bool DailyQuoteClient::load()
 
   const uint8_t raw = prefs.getUChar(kNvsLangKey, 0xFF);
   const int storedTag = (raw == 0xFF) ? -1 : static_cast<int>(raw);
-  if (vmShouldWipeForLanguage(storedTag, VM_LANG_ZH)) {
+  if (vmShouldWipeForLanguage(storedTag, VM_LANG_TAG)) {
     prefs.clear();
-    prefs.putUChar(kNvsLangKey, static_cast<uint8_t>(VM_LANG_ZH));
+    prefs.putUChar(kNvsLangKey, static_cast<uint8_t>(VM_LANG_TAG));
     prefs.end();
     cachedDateKey_ = 0;
     quote_ = "";
@@ -118,7 +122,7 @@ bool DailyQuoteClient::save()
 {
   Preferences prefs;
   if (!prefs.begin(kNvsNamespace, /*readOnly=*/false)) return false;
-  prefs.putUChar(kNvsLangKey, static_cast<uint8_t>(VM_LANG_ZH));
+  prefs.putUChar(kNvsLangKey, static_cast<uint8_t>(VM_LANG_TAG));
   prefs.putInt(kNvsDateKey, cachedDateKey_);
   const size_t written = prefs.putString(kNvsQuoteKey, quote_);
   prefs.end();
@@ -168,6 +172,11 @@ bool DailyQuoteClient::requestQuote(time_t nowEpoch, String& outQuote)
   system += "positive, encouraging, lightly funny, and suitable for a desk reminder. ";
   system += "No punctuation, no emoji, no markdown, no quotation marks inside the value. ";
   system += "Use a space instead of punctuation if a pause is needed.";
+#elif VM_LANG_PT
+  system += "Return ONLY JSON: {\\\"quote\\\":\\\"...\\\"}. ";
+  system += "A frase deve ser em portugues do Brasil, uma unica frase, no maximo 12 palavras, ";
+  system += "positiva, encorajadora, levemente bem-humorada, adequada a um lembrete de mesa. ";
+  system += "Sem emoji, sem markdown, sem aspas dentro do valor.";
 #else
   system += "Return ONLY JSON: {\\\"quote\\\":\\\"...\\\"}. ";
   system += "The quote must be English, one sentence, under 12 words, ";

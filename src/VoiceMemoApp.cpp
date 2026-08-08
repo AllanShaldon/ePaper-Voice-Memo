@@ -41,6 +41,8 @@ void VoiceMemoApp::setupPins()
   pinMode(VM_LED_PIN, OUTPUT);
   ledOff();
   pinMode(kKey0Pin, INPUT);
+  pinMode(kKey1Pin, INPUT_PULLUP);
+  pinMode(kKey2Pin, INPUT_PULLUP);
   pinMode(kBuzzerPin, OUTPUT);
   digitalWrite(kBuzzerPin, LOW);
 
@@ -72,12 +74,17 @@ void VoiceMemoApp::drawTodoList(const String& hint, bool processing,
                                 bool allowQuoteNetwork)
 {
   const time_t nowEpoch = rtc_.nowEpoch();
+  // Completed reminders age out on their own after kDoneTtlSeconds. Doing it
+  // here means every redraw is also a garbage-collection tick, so nothing
+  // lingers just because the user never pressed anything.
+  if (store_.purgeExpiredDone(nowEpoch)) selectedIndex_ = -1;
   bool quoteNetworkReady = false;
   if (allowQuoteNetwork && quote_.needsRefresh(nowEpoch)) {
     quoteNetworkReady = (WiFi.status() == WL_CONNECTED) || ensureWiFi(5000);
   }
   quote_.refreshIfNeeded(nowEpoch, quoteNetworkReady);
-  ui_.drawTodoList(store_, rtc_, currentStatus(processing), hint, quote_.quote());
+  ui_.drawTodoList(store_, rtc_, currentStatus(processing), hint, quote_.quote(),
+                   selectedIndex_);
   lastListRefreshMs_ = millis();
 }
 
@@ -188,8 +195,16 @@ void VoiceMemoApp::stopRecording(bool forced)
                  static_cast<unsigned>(audio_.audioBytes()));
 
   if (audio_.tooShort()) {
-    drawTodoList(uiStr(UiStringId::kHintTooShort), false, false);
+    // A press too short to be speech is treated as a CLICK, which is the only
+    // gesture the non-touch panels have left: it completes the selected card.
+    // Falls back to the old "hold it longer" hint when nothing is selected,
+    // so the click still teaches the user what to do.
     busy_ = false;
+    if (selectedIndex_ >= 0) {
+      toggleSelected();
+    } else {
+      drawTodoList(uiStr(UiStringId::kHintTooShort), false, false);
+    }
     return;
   }
 
@@ -274,6 +289,67 @@ void VoiceMemoApp::pollButton()
   }
 }
 
+void VoiceMemoApp::moveSelection(int delta)
+{
+  if (recording_ || busy_) return;
+  const int n = static_cast<int>(store_.count());
+  if (n <= 0) { selectedIndex_ = -1; return; }
+
+  // Only the cards actually on screen can be selected: selecting an off-page
+  // entry would move a highlight the user cannot see.
+  const int visible = (n < VM_VISIBLE_MEMO_MAX) ? n : VM_VISIBLE_MEMO_MAX;
+
+  if (selectedIndex_ < 0) {
+    // First press enters the list from the end the user is reaching toward.
+    selectedIndex_ = (delta > 0) ? 0 : visible - 1;
+  } else {
+    selectedIndex_ += delta;
+    if (selectedIndex_ < 0) selectedIndex_ = 0;
+    if (selectedIndex_ >= visible) selectedIndex_ = visible - 1;
+  }
+  Serial1.printf("[nav] selecao=%d de %d\n", selectedIndex_, visible);
+  drawTodoList(uiStr(UiStringId::kHintAdd), false, false);
+}
+
+void VoiceMemoApp::toggleSelected()
+{
+  if (recording_ || busy_) return;
+  if (selectedIndex_ < 0 || selectedIndex_ >= static_cast<int>(store_.count())) return;
+
+  const time_t now = rtc_.nowEpoch();
+  store_.toggleDone(static_cast<size_t>(selectedIndex_), now);
+  Serial1.printf("[nav] concluido toggle linha %d\n", selectedIndex_);
+
+  // The card jumps to the bottom on the next sort, so the highlight would end
+  // up pointing at a different reminder. Drop the selection instead of letting
+  // it silently follow the row that slid into place.
+  selectedIndex_ = -1;
+  drawTodoList(uiStr(UiStringId::kHintAdd), false, false);
+}
+
+void VoiceMemoApp::pollNavButtons()
+{
+  if (recording_ || busy_) return;
+  const unsigned long now = millis();
+
+  // KEY2 (left) moves the selection up, KEY1 (middle) moves it down. Both are
+  // active low with internal pull-ups, debounced exactly like KEY0, and act on
+  // the press edge so a held key does not scroll away.
+  const bool rawK2 = digitalRead(kKey2Pin);
+  if (rawK2 != lastRawKey2_) { debounceKey2Ms_ = now; lastRawKey2_ = rawK2; }
+  if ((now - debounceKey2Ms_) > kDebounceDelayMs && rawK2 != stableKey2_) {
+    stableKey2_ = rawK2;
+    if (stableKey2_ == LOW) moveSelection(-1);
+  }
+
+  const bool rawK1 = digitalRead(kKey1Pin);
+  if (rawK1 != lastRawKey1_) { debounceKey1Ms_ = now; lastRawKey1_ = rawK1; }
+  if ((now - debounceKey1Ms_) > kDebounceDelayMs && rawK1 != stableKey1_) {
+    stableKey1_ = rawK1;
+    if (stableKey1_ == LOW) moveSelection(1);
+  }
+}
+
 void VoiceMemoApp::pollTouch()
 {
 #if !VM_HAS_TOUCH
@@ -291,7 +367,7 @@ void VoiceMemoApp::pollTouch()
   if (idx < 0) return;
 
   Serial1.printf("[touch] toggle row %d\n", idx);
-  store_.toggleDone(static_cast<size_t>(idx));
+  store_.toggleDone(static_cast<size_t>(idx), rtc_.nowEpoch());
   drawTodoList(uiStr(UiStringId::kHintAdd), false, false);
 #endif
 }
@@ -320,6 +396,7 @@ void VoiceMemoApp::loop()
 {
   pollButton();
   captureChunk();
+  pollNavButtons();
   pollTouch();
   pollScheduledRefresh();
 }

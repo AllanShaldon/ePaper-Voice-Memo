@@ -72,9 +72,9 @@ void MemoStore::reconcileLanguage()
 
   const uint8_t raw = prefs.getUChar(kNvsLangKey, 0xFF);
   const int storedTag = (raw == 0xFF) ? -1 : static_cast<int>(raw);
-  if (vmShouldWipeForLanguage(storedTag, VM_LANG_ZH)) {
+  if (vmShouldWipeForLanguage(storedTag, VM_LANG_TAG)) {
     prefs.remove(kNvsKey);
-    prefs.putUChar(kNvsLangKey, static_cast<uint8_t>(VM_LANG_ZH));
+    prefs.putUChar(kNvsLangKey, static_cast<uint8_t>(VM_LANG_TAG));
   }
   prefs.end();
 }
@@ -113,14 +113,16 @@ bool MemoStore::load()
 
   count_ = 0;
   for (uint8_t i = 0; i < count; i++) {
-    if (offset + 8 + 1 + 2 > read) { count_ = 0; return false; }
-    const int64_t  due   = readLE64(buf + offset); offset += 8;
-    const uint8_t  flags = buf[offset++];
-    const uint16_t tlen  = readLE16(buf + offset); offset += 2;
+    if (offset + 8 + 8 + 1 + 2 > read) { count_ = 0; return false; }
+    const int64_t  due    = readLE64(buf + offset); offset += 8;
+    const int64_t  doneAt = readLE64(buf + offset); offset += 8;
+    const uint8_t  flags  = buf[offset++];
+    const uint16_t tlen   = readLE16(buf + offset); offset += 2;
     if (offset + tlen + 2 > read) { count_ = 0; return false; }
 
     MemoEntry& e = items_[count_++];
     e.dueEpoch = static_cast<time_t>(due);
+    e.doneAt   = static_cast<time_t>(doneAt);
     e.hasDue   = (flags & kFlagHasDue) != 0;
     e.done     = (flags & kFlagDone)   != 0;
 
@@ -158,9 +160,10 @@ bool MemoStore::save()
     const uint16_t tlen = static_cast<uint16_t>(e.text.length());
     const uint16_t flen = static_cast<uint16_t>(e.fuzzyLabel.length());
 
-    if (offset + 8 + 1 + 2 + tlen + 2 + flen > sizeof(buf)) return false;
+    if (offset + 8 + 8 + 1 + 2 + tlen + 2 + flen > sizeof(buf)) return false;
 
     writeLE64(buf + offset, static_cast<int64_t>(e.dueEpoch)); offset += 8;
+    writeLE64(buf + offset, static_cast<int64_t>(e.doneAt));   offset += 8;
     uint8_t flags = 0;
     if (e.hasDue) flags |= kFlagHasDue;
     if (e.done)   flags |= kFlagDone;
@@ -274,11 +277,40 @@ void MemoStore::sortByDue(time_t now)
   }
 }
 
-bool MemoStore::toggleDone(size_t i)
+bool MemoStore::toggleDone(size_t i, time_t now)
 {
   if (i >= count_) return false;
   items_[i].done = !items_[i].done;
+  // Stamp when it became done so purgeExpiredDone() can age it out; clear the
+  // stamp on un-done so the entry goes back to living indefinitely.
+  items_[i].doneAt = items_[i].done ? now : 0;
   return save();
+}
+
+bool MemoStore::purgeExpiredDone(time_t now)
+{
+  // A zero/absent clock must never purge: before the RTC is sane, `now` can be
+  // small enough that (now - doneAt) looks huge and would wipe fresh entries.
+  if (now <= 0) return false;
+
+  size_t out = 0;
+  bool removed = false;
+  for (size_t i = 0; i < count_; i++) {
+    const MemoEntry& e = items_[i];
+    const bool expired = e.done && e.doneAt > 0 &&
+                         (now - e.doneAt) >= kDoneTtlSeconds;
+    if (expired) {
+      removed = true;
+      continue;
+    }
+    if (out != i) items_[out] = items_[i];
+    out++;
+  }
+  if (!removed) return false;
+
+  count_ = out;
+  save();
+  return true;
 }
 
 bool MemoStore::clear()

@@ -2,10 +2,10 @@
 
 #include "UiLang.h"
 
-#if VM_LANG_ZH
+#if VM_UI_TTF
 
 #include "OpenFontRender.h"
-#include "FontZH.h"   // const unsigned char vm_font_zh[]; vm_font_zh_len
+#include "FontActive.h"  // vm_font_data / vm_font_len for this build
 
 // OpenFontRender's FileSupport.h declares these file hooks for its file-based
 // loadFont path. We load the font from memory and never open a file, but the
@@ -30,7 +30,7 @@ uint16_t g_ink = 0;
 // Maps the bitmap "size unit" (the old setTextSize scale, ~8 px per unit) to
 // OpenFontRender pixels. Tune on hardware so Chinese glyphs visually match the
 // former bitmap sizes.
-constexpr int VM_ZH_PX_PER_UNIT = 8;
+constexpr int VM_TTF_PX_PER_UNIT = VM_UI_TTF_PX_PER_UNIT;
 
 }  // namespace
 
@@ -60,7 +60,7 @@ uint8_t toTftDatum(TextAlign a) {
 bool TextRenderer::begin(EPaper& display)
 {
   display_ = &display;
-#if VM_LANG_ZH
+#if VM_UI_TTF
   g_disp = &display;
   g_ofr.setDrawer(static_cast<TFT_eSPI&>(display));
   // The gray16 panel is a 4-bit sprite: drawPixel keeps only the low 4 bits of
@@ -80,7 +80,7 @@ bool TextRenderer::begin(EPaper& display)
   });
   // loadFont returns non-zero on failure. The font is embedded in flash
   // (FontZH.h), so there is no filesystem to mount.
-  if (g_ofr.loadFont(vm_font_zh, vm_font_zh_len)) {
+  if (g_ofr.loadFont(vm_font_data, vm_font_len)) {
     fontReady_ = false;
     Serial1.println("[ofr] loadFont (embedded) failed");
     return false;
@@ -98,7 +98,7 @@ void TextRenderer::drawText(const String& text, int x, int y, int sizeUnit,
                             TextAlign align, uint16_t color, uint16_t bg)
 {
   if (!display_) return;
-#if VM_LANG_ZH
+#if VM_UI_TTF
   // Never call into OpenFontRender without a loaded font: it dereferences a
   // null face and crashes. Degrade by skipping the glyphs instead.
   if (!fontReady_) return;
@@ -106,7 +106,7 @@ void TextRenderer::drawText(const String& text, int x, int y, int sizeUnit,
   // Solid ink the pixel hooks paint for this glyph run.
   g_ink = color;
 
-  const unsigned px = static_cast<unsigned>(sizeUnit * VM_ZH_PX_PER_UNIT);
+  const unsigned px = static_cast<unsigned>(sizeUnit * VM_TTF_PX_PER_UNIT);
   g_ofr.setFontSize(px);
   // "%s" wrapper: getTextWidth is printf-style, so a literal '%' in the text
   // would otherwise be read as a format specifier.
@@ -152,9 +152,9 @@ void TextRenderer::drawText(const String& text, int x, int y, int sizeUnit,
 int TextRenderer::measureText(const String& text, int sizeUnit)
 {
   if (!display_) return 0;
-#if VM_LANG_ZH
+#if VM_UI_TTF
   if (!fontReady_) return 0;
-  g_ofr.setFontSize(static_cast<unsigned>(sizeUnit * VM_ZH_PX_PER_UNIT));
+  g_ofr.setFontSize(static_cast<unsigned>(sizeUnit * VM_TTF_PX_PER_UNIT));
   return static_cast<int>(g_ofr.getTextWidth("%s", text.c_str()));
 #else
   display_->setTextSize(sizeUnit);

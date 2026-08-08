@@ -12,11 +12,28 @@
 #ifndef VOICE_MEMO_UI_LANG_H
 #define VOICE_MEMO_UI_LANG_H
 
-// 1 for the Chinese build, 0 for the English build.
+// 1 for the Chinese build, 0 otherwise.
 #if defined(VM_UI_LANG_ZH)
   #define VM_LANG_ZH 1
 #else
   #define VM_LANG_ZH 0
+#endif
+
+// 1 for the Brazilian Portuguese build, 0 otherwise.
+#if defined(VM_UI_LANG_PT)
+  #define VM_LANG_PT 1
+#else
+  #define VM_LANG_PT 0
+#endif
+
+// Languages whose glyphs are not in the built-in CP437 bitmap font must render
+// through OpenFontRender with an embedded TrueType face. Chinese needs it for
+// the CJK ideographs; Portuguese needs it because the bitmap font has no
+// "a-tilde" / "o-tilde" glyph at all and maps the rest to the wrong CP437 slot.
+#if VM_LANG_ZH || VM_LANG_PT
+  #define VM_UI_TTF 1
+#else
+  #define VM_UI_TTF 0
 #endif
 
 // One id per fixed UI string. kCount is a sentinel for iteration in tests.
@@ -77,11 +94,44 @@ inline const char* uiStrZh(UiStringId id) {
   }
 }
 
+// Brazilian Portuguese column.
+inline const char* uiStrPt(UiStringId id) {
+  switch (id) {
+    case UiStringId::kAppName:      return "Lembretes";
+    case UiStringId::kHintAdd:      return "KEY0 segure grava, clique conclui. KEY2 sobe, KEY1 desce.";
+    case UiStringId::kHintTooShort: return "Segure KEY0 por pelo menos um segundo.";
+    case UiStringId::kHintNoWifi:   return "Lembrete descartado: WiFi indisponível.";
+    case UiStringId::kHintMaxLen:   return "Limite de gravação atingido. Segure KEY0 de novo.";
+    case UiStringId::kEmptyList:    return "Segure KEY0 e fale para criar seu primeiro lembrete.";
+    case UiStringId::kProcessing:   return "Processando";
+    case UiStringId::kReminders:    return "Lembretes";
+    case UiStringId::kBootStarting: return "Iniciando...";
+    case UiStringId::kBootWifi:     return "Conectando WiFi...";
+    case UiStringId::kSomeDay:      return "Algum dia";
+    case UiStringId::kOverdue:      return "Atrasado";
+    case UiStringId::kNoSpeech:     return "Nada reconhecido.";
+    default:                        return "";
+  }
+}
+
 // Active column for the current build.
 #if VM_LANG_ZH
 inline const char* uiStr(UiStringId id) { return uiStrZh(id); }
+#elif VM_LANG_PT
+inline const char* uiStr(UiStringId id) { return uiStrPt(id); }
 #else
 inline const char* uiStr(UiStringId id) { return uiStrEn(id); }
+#endif
+
+// Stable per-language tag persisted beside the reminder blob. Adding a
+// language means adding a value here, never renumbering an existing one --
+// the numbers live in users' NVS.
+#if VM_LANG_ZH
+  #define VM_LANG_TAG 1
+#elif VM_LANG_PT
+  #define VM_LANG_TAG 2
+#else
+  #define VM_LANG_TAG 0
 #endif
 
 // True when a stored language tag requires wiping the reminder store: the tag

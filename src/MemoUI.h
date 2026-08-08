@@ -58,7 +58,8 @@ class MemoUI {
                     RtcClock& rtc,
                     const UiStatus& status,
                     const String& hint,
-                    const String& quote);
+                    const String& quote,
+                    int selectedIndex = -1);
 
   // One-page boot/splash screen reusing the header.
   void drawBoot(RtcClock& rtc, const String& statusText, const UiStatus& status);
@@ -88,10 +89,10 @@ class MemoUI {
   // Card layouts.
   void drawCard(int x, int y, int w, int h,
                 const MemoEntry& entry, time_t nowEpoch,
-                HitRect& outHit);
+                HitRect& outHit, bool selected = false);
   void drawCompactCard(int x, int y, int w, int h,
                        const MemoEntry& entry, time_t nowEpoch,
-                       HitRect& outHit);
+                       HitRect& outHit, bool selected = false);
   void drawCheckbox(int cx, int cy, int size, bool done, uint16_t fg);
 
   // Shared text helpers.

@@ -69,7 +69,10 @@ static VoiceMemoConfig buildConfig()
       .url      = "https://api.groq.com/openai/v1/audio/transcriptions",
       .apiKey   = nvsApiKey.c_str(),
       .model    = "whisper-large-v3-turbo",
-      .language = VM_LANG_ZH ? "zh" : "",
+      // Whisper auto-detects when this is empty, but naming the language up
+      // front measurably cuts mis-transcription on short clips -- which is
+      // exactly what a one-sentence reminder is.
+      .language = VM_LANG_ZH ? "zh" : (VM_LANG_PT ? "pt" : ""),
     },
 
     .memo = {

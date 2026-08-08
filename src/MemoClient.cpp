@@ -200,6 +200,46 @@ MemoEntry MemoClient::summarizeOpenAICompatible(const String& transcript,
   system += "输出: {\\\"memo\\\":\\\"取快递\\\",\\\"due\\\":\\\"2026-05-30 15:00\\\",\\\"due_label\\\":\\\"\\\"}\\n";
   system += "输入: \\\"买点苹果\\\"\\n";
   system += "输出: {\\\"memo\\\":\\\"买苹果\\\",\\\"due\\\":\\\"2026-05-30 19:00\\\",\\\"due_label\\\":\\\"NONE\\\"}";
+#elif VM_LANG_PT
+  // Portuguese build: ask for a Brazilian Portuguese memo and PT time-of-day
+  // labels. Same pre-escaped style as the other branches (\\n is a JSON
+  // newline, \\\" a JSON quote) so it appends to the body unchanged.
+  system += "Você é um motor de extração de lembretes para um dispositivo ";
+  system += "embarcado. A transcrição do usuário pode estar em português, ";
+  system += "inglês ou misturada.\\n\\n";
+  system += "HORA LOCAL ATUAL: ";
+  system += nowStr;
+  system += " (";
+  system += weekday;
+  system += ").\\n\\n";
+  system += "Retorne SOMENTE este objeto JSON. Sem explicação. Sem markdown.\\n";
+  system += "{\\\"memo\\\":\\\"<lembrete curto em português>\\\",\\\"due\\\":\\\"YYYY-MM-DD HH:MM\\\",\\\"due_label\\\":\\\"<período do dia ou vazio>\\\"}\\n\\n";
+  system += "REGRAS DOS CAMPOS:\\n";
+  system += "1) memo: uma frase curta e direta em português do Brasil. ";
+  system += "Remova hesitações. Não comece com 'Lembrar de'.\\n";
+  system += "2) due: SEMPRE forneça uma data e hora local absoluta, inferida a partir da HORA LOCAL ATUAL.\\n";
+  system += "3) due_label: classifica APENAS o período do dia.\\n";
+  system += "   - Hora exata informada (8, 14:30, 3 da tarde) -> due_label = \\\"\\\" (o aparelho mostra HH:MM).\\n";
+  system += "   - Só um período, sem número -> use UMA palavra: Manhã / Tarde / Meio-dia / Noite.\\n";
+  system += "       manhã/de manhã -> Manhã\\n";
+  system += "       tarde/à tarde -> Tarde\\n";
+  system += "       meio-dia -> Meio-dia\\n";
+  system += "       noite/à noite/hoje à noite -> Noite\\n";
+  system += "   - Nenhuma hora mencionada -> due_label = \\\"NONE\\\" (o aparelho não mostra relógio).\\n";
+  system += "   O DIA é calculado pelo aparelho a partir de `due`. NUNCA coloque palavra de dia (Hoje/Amanhã/Semana) em due_label.\\n\\n";
+  system += "EXEMPLOS:\\n";
+  system += "Entrada: \\\"amanhã vou dançar\\\"\\n";
+  system += "Saída: {\\\"memo\\\":\\\"Ir dançar\\\",\\\"due\\\":\\\"2026-05-31 09:00\\\",\\\"due_label\\\":\\\"NONE\\\"}\\n";
+  system += "Entrada: \\\"me lembra de tomar banho hoje à noite\\\"\\n";
+  system += "Saída: {\\\"memo\\\":\\\"Tomar banho\\\",\\\"due\\\":\\\"2026-05-30 21:00\\\",\\\"due_label\\\":\\\"Noite\\\"}\\n";
+  system += "Entrada: \\\"me chama pra jantar às 8 da noite\\\"\\n";
+  system += "Saída: {\\\"memo\\\":\\\"Jantar\\\",\\\"due\\\":\\\"2026-05-30 20:00\\\",\\\"due_label\\\":\\\"\\\"}\\n";
+  system += "Entrada: \\\"reunião amanhã de manhã\\\"\\n";
+  system += "Saída: {\\\"memo\\\":\\\"Reunião\\\",\\\"due\\\":\\\"2026-05-31 09:00\\\",\\\"due_label\\\":\\\"Manhã\\\"}\\n";
+  system += "Entrada: \\\"pegar encomenda às 3 da tarde\\\"\\n";
+  system += "Saída: {\\\"memo\\\":\\\"Pegar encomenda\\\",\\\"due\\\":\\\"2026-05-30 15:00\\\",\\\"due_label\\\":\\\"\\\"}\\n";
+  system += "Entrada: \\\"comprar umas maçãs\\\"\\n";
+  system += "Saída: {\\\"memo\\\":\\\"Comprar maçãs\\\",\\\"due\\\":\\\"2026-05-30 19:00\\\",\\\"due_label\\\":\\\"NONE\\\"}";
 #else
   system += "You are a memo extraction engine for an embedded reminder ";
   system += "device. The user transcript may be Chinese, English, or mixed.\\n\\n";

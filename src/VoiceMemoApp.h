@@ -60,7 +60,9 @@ class VoiceMemoApp {
   // because it changes between E1001/E1002/E1003.
   static constexpr int kSerialRxPin    = 44;
   static constexpr int kSerialTxPin    = 43;
-  static constexpr int kKey0Pin        = 3;
+  static constexpr int kKey0Pin        = 3;   // right  -- hold records, click completes
+  static constexpr int kKey1Pin        = 4;   // middle -- selection down
+  static constexpr int kKey2Pin        = 5;   // left   -- selection up
   static constexpr int kMicClkPin      = 42;
   static constexpr int kMicDataPin     = 41;
   static constexpr int kMicPwrEnPin    = 38;
@@ -94,6 +96,18 @@ class VoiceMemoApp {
   bool          busy_;
   bool          lastRawButton_;
   bool          stableButton_;
+
+  // Selection cursor for the non-touch panels. -1 = nothing selected, which is
+  // the state the device boots into so a stray KEY0 click cannot complete a
+  // reminder the user never pointed at.
+  int           selectedIndex_ = -1;
+  // Debounce state for the two navigation keys, same shape as KEY0's.
+  bool          lastRawKey1_ = HIGH;
+  bool          stableKey1_  = HIGH;
+  unsigned long debounceKey1Ms_ = 0;
+  bool          lastRawKey2_ = HIGH;
+  bool          stableKey2_  = HIGH;
+  unsigned long debounceKey2Ms_ = 0;
   bool          ledState_;
   unsigned long debounceMs_;
   unsigned long lastBlinkMs_;
@@ -108,7 +122,13 @@ class VoiceMemoApp {
   UiStatus currentStatus(bool processing);
 
   void pollButton();
+  void pollNavButtons();
   void pollTouch();
+  // Moves the selection cursor by delta over the visible cards, clamping at
+  // both ends, and redraws. No-op while recording or busy.
+  void moveSelection(int delta);
+  // Completes / un-completes the selected card. No-op when nothing is selected.
+  void toggleSelected();
   void pollScheduledRefresh();
   void startRecording();
   void stopRecording(bool forced);

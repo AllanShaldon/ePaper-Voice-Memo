@@ -40,9 +40,15 @@ constexpr uint16_t kUiLine     = TFT_GRAY_8;
 constexpr uint16_t kUiBadge    = TFT_GRAY_3;
 #endif
 
+#if VM_LANG_PT
+const char* kWeekdayShort[] = {"Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"};
+const char* kMonthShort[]   = {"Jan", "Fev", "Mar", "Abr", "Mai", "Jun",
+                               "Jul", "Ago", "Set", "Out", "Nov", "Dez"};
+#else
 const char* kWeekdayShort[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
 const char* kMonthShort[]   = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
                                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+#endif
 
 }  // namespace
 
@@ -327,7 +333,7 @@ void MemoUI::drawCheckbox(int cx, int cy, int size, bool done, uint16_t fg)
 
 void MemoUI::drawCard(int x, int y, int w, int h,
                       const MemoEntry& entry, time_t nowEpoch,
-                      HitRect& outHit)
+                      HitRect& outHit, bool selected)
 {
   // Pick palette based on done / overdue state.
   uint16_t fill;
@@ -416,7 +422,7 @@ void MemoUI::drawCard(int x, int y, int w, int h,
 
 void MemoUI::drawCompactCard(int x, int y, int w, int h,
                              const MemoEntry& entry, time_t nowEpoch,
-                             HitRect& outHit)
+                             HitRect& outHit, bool selected)
 {
   uint16_t fill;
   uint16_t fg;
@@ -478,12 +484,37 @@ void MemoUI::drawCompactCard(int x, int y, int w, int h,
   const int memoSize = 2;
   const int memoLineH = 18;
   const int oneLineW = renderer_.measureText(entry.text, memoSize);
-  if (oneLineW <= memoMaxW) {
+  const bool oneLine = (oneLineW <= memoMaxW);
+  if (oneLine) {
     renderer_.drawText(entry.text, memoX, y + h / 2 - 8, memoSize,
                        TextAlign::TopLeft, fg, fill);
   } else {
     drawWrapped(entry.text, memoX, y + 12, memoMaxW, memoLineH,
                 memoSize, fg, 2);
+  }
+
+  // Completed reminders are struck through so "done" reads at a glance,
+  // without waiting for the eye to find the small checkbox. The rule spans
+  // only the text itself on a single line; wrapped text gets one rule per
+  // line across the measured column, which is the best a bitmap-free
+  // strikethrough can do here.
+  if (entry.done) {
+    const int strikeW = oneLine ? min(oneLineW, memoMaxW) : memoMaxW;
+    if (oneLine) {
+      display_.drawFastHLine(memoX, y + h / 2, strikeW, fg);
+    } else {
+      display_.drawFastHLine(memoX, y + 12 + memoLineH / 2, strikeW, fg);
+      display_.drawFastHLine(memoX, y + 12 + memoLineH + memoLineH / 2,
+                             strikeW, fg);
+    }
+  }
+
+  // Selection cursor for the non-touch panels: a double outline, because a
+  // single 1 px rounded rect is easy to lose against the card fill on a
+  // 4-gray e-paper panel.
+  if (selected) {
+    display_.drawRoundRect(x, y, w, h, 6, kUiText);
+    display_.drawRoundRect(x + 1, y + 1, w - 2, h - 2, 6, kUiText);
   }
 }
 
@@ -584,7 +615,7 @@ void MemoUI::drawBoot(RtcClock& rtc, const String& statusText, const UiStatus& s
 
 void MemoUI::drawTodoList(MemoStore& store, RtcClock& rtc,
                           const UiStatus& status, const String& hint,
-                          const String& quote)
+                          const String& quote, int selectedIndex)
 {
   const time_t nowEpoch = rtc.nowEpoch();
 #if VM_SCREEN_MODE == VM_SCREEN_GRAY16
@@ -622,7 +653,7 @@ void MemoUI::drawTodoList(MemoStore& store, RtcClock& rtc,
     for (size_t i = 0; i < store.count(); i++) {
       const int cardY = listTop + static_cast<int>(i) * rowH + gap / 2;
       drawCard(margin, cardY, cardW, cardH, store.at(i), nowEpoch,
-               checkboxHits_[i]);
+               checkboxHits_[i], static_cast<int>(i) == selectedIndex);
     }
   }
 
@@ -664,7 +695,7 @@ void MemoUI::drawTodoList(MemoStore& store, RtcClock& rtc,
     for (size_t i = 0; i < renderCount; i++) {
       const int cardY = listTop + static_cast<int>(i) * rowH + gap / 2;
       drawCompactCard(margin, cardY, cardW, cardH, store.at(i), nowEpoch,
-                      checkboxHits_[i]);
+                      checkboxHits_[i], static_cast<int>(i) == selectedIndex);
     }
   }
 

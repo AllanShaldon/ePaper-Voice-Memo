@@ -50,9 +50,29 @@ inline const char* vmDateChipLabelZh(int days, int wday)
     return nullptr;
 }
 
+// Short date-chip label (Brazilian Portuguese). Same contract as the English
+// variant: returns nullptr for days >= 7 (caller formats "Mes DD").
+// Labels are kept short on purpose -- the chip is right-aligned in a narrow
+// column, so "Depois de amanha" would not fit.
+inline const char* vmDateChipLabelPt(int days, int wday)
+{
+    static const char* kWeekdaysPt[] = {
+        "Domingo", "Segunda", "Terça", "Quarta",
+        "Quinta", "Sexta", "Sábado"
+    };
+    if (days == 0) return "Hoje";
+    if (days == 1) return "Amanhã";
+    if (days == 2) return "Depois";
+    if (days >= 3 && days <= 6)
+        return kWeekdaysPt[(wday >= 0 && wday < 7) ? wday : 0];
+    return nullptr;
+}
+
 // The build's active variant.
 #if VM_LANG_ZH
   #define vmDateChipLabel vmDateChipLabelZh
+#elif VM_LANG_PT
+  #define vmDateChipLabel vmDateChipLabelPt
 #else
   #define vmDateChipLabel vmDateChipLabelEn
 #endif
