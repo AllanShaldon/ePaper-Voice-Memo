@@ -211,3 +211,13 @@ pio test -e native
 - Example files should contain placeholders only.
 - The HTTPS examples use simplified certificate handling for developer convenience. Production firmware should pin a CA certificate or public key.
 - Free API limits can change. Treat the provider console as the source of truth.
+
+## Hardware SDK
+
+O conhecimento de hardware deste dispositivo (pinos, mapa I²C/BLE, sequências de init,
+**armadilhas medidas**, protocolo) está consolidado no **hw-sdk** para reúso em outros projetos:
+
+- **Seeed reTerminal E (E1001/2/3)** → [`hw-sdk/reterminal-e-voicememo/PERFIL.md`](https://github.com/AllanShaldon/hw-sdk/blob/main/reterminal-e-voicememo/PERFIL.md) · local: `~/Projects/hw-sdk/reterminal-e-voicememo/PERFIL.md`
+
+Repo: `AllanShaldon/hw-sdk` (privado) · `~/Projects/hw-sdk`. Ao evoluir o hardware aqui,
+atualize também o PERFIL.md correspondente (medição × inferência marcadas).
