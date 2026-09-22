@@ -51,6 +51,18 @@ If WiFi or the API is unavailable, the device keeps the old quote. If no quote h
 
 On boot, the firmware reads the onboard PCF8563 RTC. If the RTC is invalid or earlier than the firmware build time by more than 60 seconds, the device writes the build time into the RTC. If the RTC is already later than the build time, it is left alone so a normal reboot after upload does not rewind the clock.
 
+### NTP Clock Sync
+
+The build-time seed alone can only push the clock forward, so an RTC that runs ahead — or one seeded from a machine in another timezone — stays wrong forever. After WiFi comes up the device asks SNTP for UTC, applies a fixed local offset, and writes the result to the PCF8563. This corrects the clock in **both** directions and repeats every 6 hours, piggybacking on the 5-minute idle refresh. If SNTP does not answer, the RTC keeps whatever it had: a stale clock beats a clock reset to the epoch.
+
+The offset defaults to UTC-3 (America/Fortaleza, no DST). For another zone, build with `-D VM_TZ_OFFSET_SECONDS=<seconds>`. The boot log prints the clock before and after the sync:
+
+```
+[rtc] before ntp: 2026/09/22 Tue 08:02
+[ntp] utc epoch 1790074983 after 3201 ms
+[rtc] 2026-09-22 08:03:02 -> 2026-09-22 08:03:03 (ntp)
+```
+
 ### Persistent Storage
 
 Reminders are stored in ESP32-S3 NVS. A reboot or power cycle restores the list automatically. Switching between English and Chinese firmware clears the old language's reminders so the list does not mix languages.

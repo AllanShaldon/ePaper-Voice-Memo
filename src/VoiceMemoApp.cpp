@@ -24,7 +24,9 @@ VoiceMemoApp::VoiceMemoApp(const VoiceMemoConfig& config)
     ledState_(false),
     debounceMs_(0),
     lastBlinkMs_(0),
-    lastListRefreshMs_(0)
+    lastListRefreshMs_(0),
+    lastNtpSyncMs_(0),
+    ntpSynced_(false)
 {
 }
 
@@ -128,6 +130,21 @@ bool VoiceMemoApp::ensureWiFi(uint32_t timeoutMs)
   return false;
 }
 
+bool VoiceMemoApp::syncClockFromNtp(uint32_t timeoutMs, bool force)
+{
+  const unsigned long now = millis();
+  if (!force && ntpSynced_ && (now - lastNtpSyncMs_) < kNtpResyncMs) return false;
+  if (WiFi.status() != WL_CONNECTED) return false;
+
+  const time_t utc = vmFetchNtpUtcEpoch(timeoutMs);
+  if (utc <= 0) return false;
+  if (!rtc_.setFromUtcEpoch(utc, VM_TZ_OFFSET_SECONDS)) return false;
+
+  ntpSynced_ = true;
+  lastNtpSyncMs_ = now;
+  return true;
+}
+
 void VoiceMemoApp::begin()
 {
   // Arduino startup order:
@@ -190,6 +207,12 @@ void VoiceMemoApp::begin()
 
   ui_.drawBoot(rtc_, uiStr(UiStringId::kBootWifi), currentStatus(false));
   ensureWiFi(15000);
+
+  // Network time, if the network is there. The RTC keeps whatever it had when
+  // SNTP does not answer -- a stale clock beats a clock reset to the epoch.
+  Serial1.printf("[rtc] before ntp: %s %s\n",
+                 rtc_.nowDateLabel().c_str(), rtc_.nowTimeLabel().c_str());
+  syncClockFromNtp(10000, true);
 
   drawTodoList(uiStr(UiStringId::kHintAdd), false, true, /*partial=*/true);
 }
@@ -560,6 +583,10 @@ void VoiceMemoApp::pollScheduledRefresh()
       || rawButton != stableButton_
       || now - debounceMs_ <= kDebounceDelayMs;
   if (key0MayBeActive) return;
+
+  // Piggyback on the timed refresh so the clock the user is about to read is
+  // the one we just checked. Rate limited inside syncClockFromNtp().
+  if (WiFi.status() == WL_CONNECTED) syncClockFromNtp(5000, false);
 
   drawTodoList(uiStr(UiStringId::kHintAdd), false, true, /*partial=*/true);
 }
