@@ -222,6 +222,52 @@ bool RtcClock::begin(uint8_t sdaPin, uint8_t sclPin)
   return available_;
 }
 
+bool RtcClock::setFromUtcEpoch(time_t utcEpoch, long tzOffsetSeconds)
+{
+  // 2024-01-01: same floor NtpSync uses. A caller that hands us epoch 0 gets
+  // a refusal instead of silently rewinding the chip to the year 2000.
+  if (utcEpoch < 1704067200) {
+    Serial1.println("[rtc] refused network time: epoch out of range");
+    return false;
+  }
+
+  const time_t localEpoch = utcEpoch + tzOffsetSeconds;
+  struct tm lt = {};
+  // gmtime_r on an already-offset epoch gives the local wall clock without
+  // depending on the runtime TZ, which this firmware never configures.
+  if (gmtime_r(&localEpoch, &lt) == nullptr) return false;
+
+  VoiceMemoRtcTime before = {};
+  const bool hadTime = readTime(before);
+
+  if (!setTime(lt.tm_year + 1900, lt.tm_mon + 1, lt.tm_mday,
+               lt.tm_hour, lt.tm_min, lt.tm_sec)) {
+    Serial1.println("[rtc] network time write failed");
+    return false;
+  }
+
+  VoiceMemoRtcTime after = {};
+  if (!readTime(after) || rtcTimeToEpoch(after) <= 0) {
+    Serial1.println("[rtc] network time did not stick");
+    return false;
+  }
+
+  if (hadTime) {
+    Serial1.printf("[rtc] %04d-%02d-%02d %02d:%02d:%02d -> %04d-%02d-%02d %02d:%02d:%02d (ntp)\n",
+                   before.year, before.month, before.day,
+                   before.hour, before.minute, before.second,
+                   after.year, after.month, after.day,
+                   after.hour, after.minute, after.second);
+  } else {
+    Serial1.printf("[rtc] set from ntp: %04d-%02d-%02d %02d:%02d:%02d\n",
+                   after.year, after.month, after.day,
+                   after.hour, after.minute, after.second);
+  }
+
+  available_ = true;
+  return true;
+}
+
 time_t RtcClock::nowEpoch()
 {
   VoiceMemoRtcTime rt = {};

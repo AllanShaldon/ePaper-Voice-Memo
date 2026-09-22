@@ -40,6 +40,13 @@ class RtcClock {
   bool begin(uint8_t sdaPin, uint8_t sclPin);
   bool available() const { return available_; }
 
+  // Writes a network time into the chip. utcEpoch comes from SNTP and
+  // tzOffsetSeconds turns it into the local wall clock the chip stores.
+  // Unlike the build-time seed, this corrects the clock in BOTH directions:
+  // an RTC running ahead is pulled back. Returns false when the write failed
+  // or utcEpoch is not a sane time.
+  bool setFromUtcEpoch(time_t utcEpoch, long tzOffsetSeconds);
+
   bool readTime(VoiceMemoRtcTime& out);
   time_t nowEpoch();
   String nowTimeLabel();

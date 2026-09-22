@@ -27,6 +27,7 @@
 #include "MemoClient.h"
 #include "MemoStore.h"
 #include "MemoUI.h"
+#include "NtpSync.h"
 #include "RtcClock.h"
 #include "SpeechClient.h"
 #include "TouchInput.h"
@@ -77,6 +78,9 @@ class VoiceMemoApp {
 
   static constexpr unsigned long kDebounceDelayMs = 35;
   static constexpr unsigned long kListRefreshMs = 5UL * 60UL * 1000UL;
+  // The PCF8563 drifts; one SNTP round trip every 6 h keeps the header
+  // honest without hammering the network.
+  static constexpr unsigned long kNtpResyncMs = 6UL * 60UL * 60UL * 1000UL;
 
   const VoiceMemoConfig config_;
 
@@ -98,12 +102,17 @@ class VoiceMemoApp {
   unsigned long debounceMs_;
   unsigned long lastBlinkMs_;
   unsigned long lastListRefreshMs_;
+  unsigned long lastNtpSyncMs_;
+  bool          ntpSynced_;
 
   void setupPins();
   void ledOn();
   void ledOff();
   void beepStart();
   bool ensureWiFi(uint32_t timeoutMs);
+  // Pulls UTC from SNTP and writes it to the RTC. Safe to call often: it is
+  // a no-op until kNtpResyncMs has passed since the last successful sync.
+  bool syncClockFromNtp(uint32_t timeoutMs, bool force);
   int      readBatteryPercent();
   UiStatus currentStatus(bool processing);
 
