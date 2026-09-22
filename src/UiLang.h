@@ -44,6 +44,7 @@ enum class UiStringId {
   kHintTooShort,   // recording shorter than the minimum
   kHintNoWifi,     // reminder dropped because WiFi is down
   kHintMaxLen,     // recording hit the maximum length
+  kHintDueGuessed, // AI unreachable: the due time is the device's guess
   kEmptyList,      // empty reminder list placeholder
   kProcessing,     // header "processing" tag
   kReminders,      // list title / fallback badge
@@ -64,6 +65,7 @@ inline const char* uiStrEn(UiStringId id) {
     case UiStringId::kHintTooShort: return "Hold KEY0 for at least one second.";
     case UiStringId::kHintNoWifi:   return "Reminder skipped because WiFi is unavailable.";
     case UiStringId::kHintMaxLen:   return "Stopped at max length. Hold KEY0 for another memo.";
+    case UiStringId::kHintDueGuessed: return "AI offline: time is a guess. Say it again later.";
     case UiStringId::kEmptyList:    return "Hold KEY0 and speak to add your first reminder.";
     case UiStringId::kProcessing:   return "Processing";
     case UiStringId::kReminders:    return "Reminders";
@@ -85,6 +87,7 @@ inline const char* uiStrZh(UiStringId id) {
     case UiStringId::kHintTooShort: return "请长按 KEY0 至少一秒";
     case UiStringId::kHintNoWifi:   return "WiFi 不可用 本次提醒未保存";
     case UiStringId::kHintMaxLen:   return "已到最长录音 再次长按 KEY0 继续";
+    case UiStringId::kHintDueGuessed: return "AI 未响应 时间为设备推测 请稍后重说";
     case UiStringId::kEmptyList:    return "长按 KEY0 说话 添加第一条提醒";
     case UiStringId::kProcessing:   return "处理中";
     case UiStringId::kReminders:    return "提醒";

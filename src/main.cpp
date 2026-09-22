@@ -79,7 +79,14 @@ static VoiceMemoConfig buildConfig()
       .provider = VM_MEMO_OPENAI_COMPATIBLE,
       .url      = "https://api.groq.com/openai/v1/chat/completions",
       .apiKey   = nvsApiKey.c_str(),
-      .model    = "llama-3.3-70b-versatile",
+      // llama-3.3-70b-versatile was retired by Groq and started answering 404,
+      // which silently pushed every reminder into the "now + 1 hour" fallback.
+      .model    = "openai/gpt-oss-120b",
+      // gpt-oss is a reasoning model: "low" keeps the round trip under a
+      // second, and "hidden" drops the reasoning field so the naive parser in
+      // JsonUtil.h reads the answer and not the model's train of thought.
+      .extraParams = "\"reasoning_effort\":\"low\","
+                     "\"reasoning_format\":\"hidden\",",
     },
 
     .audio = {

@@ -81,17 +81,19 @@ E1003 可以点一下卡片左侧方框来标记完成。完成项会自动变�
 | 用途 | 默认模型 | 作用 |
 | --- | --- | --- |
 | 语音识别 | `whisper-large-v3-turbo` | 把录音转成文字 |
-| 提醒整理 | `llama-3.3-70b-versatile` | 从文字里提取提醒和时间 |
-| 每日一句 | `llama-3.3-70b-versatile` | 每天生成一句鼓励短句 |
+| 提醒整理 | `openai/gpt-oss-120b` | 从文字里提取提醒和时间 |
+| 每日一句 | `openai/gpt-oss-120b` | 每天生成一句鼓励短句 |
+
+> **模型下线是静默故障。** Groq 已下线原默认模型 `llama-3.3-70b-versatile`，接口对每次调用都返回 `404`，而屏幕上毫无提示：提醒照常出现，时间却是设备兜底的「当前时间 +1 小时」，看起来就像用户自己定的。现在这种情况会显示「AI 未响应 时间为设备推测」。如果提醒时间不对，先用 `curl https://api.groq.com/openai/v1/models` 确认聊天模型是否还在。
 
 Groq 免费计划不会直接扣费，超过免费限制时通常返回 `429`。截至 2026-05-31，官方 Limits 页展示的免费层级摘要如下，实际额度请以 [Groq Console Limits](https://console.groq.com/docs/rate-limits) 为准：
 
 | 模型 | 免费限制摘要 |
 | --- | --- |
 | `whisper-large-v3-turbo` | 20 RPM、2K RPD、7.2K ASH、28.8K ASD |
-| `llama-3.3-70b-versatile` | 30 RPM、1K RPD、12K TPM、100K TPD |
+| `openai/gpt-oss-120b` | 以 Groq 控制台的当前值为准 |
 
-如果你希望日常额度更宽松，可以在配置里改用更轻量的聊天模型，例如 `llama-3.1-8b-instant`。本仓库默认代码保持 `llama-3.3-70b-versatile`，优先保证理解质量。
+`gpt-oss` 属于推理模型，请求中设置了 `reasoning_effort: low`（往返不到一秒）和 `reasoning_format: hidden`（避免思维链混进设备要解析的响应）。这两个字段写在 `MemoConfig::extraParams` 里，紧挨模型名；不需要额外字段的模型留空即可。若想要更宽松的额度，`openai/gpt-oss-20b` 在全部测试用例中也都答对了。
 
 ## 支持硬件
 

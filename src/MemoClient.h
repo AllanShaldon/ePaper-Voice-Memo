@@ -33,6 +33,11 @@ struct MemoConfig {
   const char* url;
   const char* apiKey;
   const char* model;
+  // Raw JSON fields spliced into the request body, each ending with a comma
+  // (e.g. "\"reasoning_effort\":\"low\","). Reasoning models need their own
+  // knobs, and hard-coding them here would break every other model. Leave
+  // null or empty when the model takes none.
+  const char* extraParams;
 };
 
 class MemoClient {
@@ -47,6 +52,11 @@ class MemoClient {
   // VM_MEMO_OPENAI_COMPATIBLE.
   MemoEntry summarize(const String& transcript, time_t nowEpoch);
 
+  // True when the last summarize() could not reach the model and invented a
+  // due time from the on-device rule. The UI says so instead of presenting a
+  // guessed hour as if the user had asked for it.
+  bool lastCallDegraded() const { return lastCallDegraded_; }
+
  private:
   MemoEntry summarizeOpenAICompatible(const String& transcript, time_t nowEpoch);
   MemoEntry summarizeWithRule(const String& transcript, time_t nowEpoch);
@@ -58,6 +68,7 @@ class MemoClient {
 
   MemoConfig cfg_;
   uint32_t   httpTimeoutMs_;
+  bool       lastCallDegraded_;
 };
 
 #endif  // VOICE_MEMO_MEMO_CLIENT_H

@@ -87,17 +87,19 @@ The default setup uses Groq's OpenAI-compatible API:
 | Purpose | Default model | Role |
 | --- | --- | --- |
 | Speech-to-text | `whisper-large-v3-turbo` | Transcribes the WAV recording |
-| Reminder extraction | `llama-3.3-70b-versatile` | Extracts memo text and due time |
-| Daily quote | `llama-3.3-70b-versatile` | Generates one encouraging line per day |
+| Reminder extraction | `openai/gpt-oss-120b` | Extracts memo text and due time |
+| Daily quote | `openai/gpt-oss-120b` | Generates one encouraging line per day |
+
+> **A retired model fails silently.** Groq removed `llama-3.3-70b-versatile`, the previous default, and the API answered `404` to every call. Nothing on screen said so: reminders kept appearing with a due time of "now + 1 hour" from the on-device fallback, as if the user had asked for it. The firmware now says `AI offline: time is a guess.` in that case — and if reminder times ever look wrong, check the chat model first with `curl https://api.groq.com/openai/v1/models`.
 
 Groq's free plan does not charge by default; when limits are exceeded the API usually returns `429`. As of 2026-05-31, Groq's official limits page listed these free-tier limits. Always check [Groq Console Limits](https://console.groq.com/docs/rate-limits) for the current values:
 
 | Model | Free limit summary |
 | --- | --- |
 | `whisper-large-v3-turbo` | 20 RPM, 2K RPD, 7.2K ASH, 28.8K ASD |
-| `llama-3.3-70b-versatile` | 30 RPM, 1K RPD, 12K TPM, 100K TPD |
+| `openai/gpt-oss-120b` | see the Groq console for current values |
 
-For more daily headroom, you can switch the chat model to a lighter one such as `llama-3.1-8b-instant`. This repository keeps `llama-3.3-70b-versatile` as the default for better extraction quality.
+`gpt-oss` is a reasoning model, so the request sets `reasoning_effort: low` (sub-second round trip) and `reasoning_format: hidden` (keeps the chain of thought out of the response the device parses). Both live in `MemoConfig::extraParams`, right next to the model name; a model that needs no such fields takes an empty string. For more daily headroom, `openai/gpt-oss-20b` also answered every test case correctly.
 
 ## Supported Hardware
 

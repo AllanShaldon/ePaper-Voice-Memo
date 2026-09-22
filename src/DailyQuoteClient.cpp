@@ -194,6 +194,7 @@ bool DailyQuoteClient::requestQuote(time_t nowEpoch, String& outQuote)
   body += "{\"model\":\"";
   body += voice_memo::jsonEscape(cfg_.model);
   body += "\",\"temperature\":0.8,";
+  if (cfg_.extraParams != nullptr) body += cfg_.extraParams;
   body += "\"response_format\":{\"type\":\"json_object\"},";
   body += "\"messages\":[";
   body += "{\"role\":\"system\",\"content\":\"";
