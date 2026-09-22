@@ -118,6 +118,7 @@ inline const char* uiStrPt(UiStringId id) {
     case UiStringId::kOverdue:      return "Atrasado";
     case UiStringId::kNoSpeech:     return "Nada reconhecido.";
     case UiStringId::kHintPickFirst: return "Escolha um lembrete com KEY2 / KEY1 e depois clique no KEY0.";
+    case UiStringId::kHintDueGuessed: return "IA fora do ar: o horário é chute. Repita mais tarde.";
     default:                        return "";
   }
 }
