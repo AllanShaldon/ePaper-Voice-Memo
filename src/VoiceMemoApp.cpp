@@ -254,9 +254,13 @@ void VoiceMemoApp::stopRecording(bool forced)
 #endif
   ledOff();
 
-  const String hint = forced
-      ? uiStr(UiStringId::kHintMaxLen)
-      : uiStr(UiStringId::kHintAdd);
+  // A due time the device invented must not look like one the user asked for.
+  // That hint outranks the max-length notice: a wrong hour costs more than a
+  // truncated recording.
+  const String hint = memo_.lastCallDegraded()
+      ? uiStr(UiStringId::kHintDueGuessed)
+      : (forced ? uiStr(UiStringId::kHintMaxLen)
+                : uiStr(UiStringId::kHintAdd));
   drawTodoList(hint, false, true);
 
   busy_ = false;

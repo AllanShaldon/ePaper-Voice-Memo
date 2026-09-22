@@ -46,7 +46,8 @@ const char* weekdayName(time_t epoch)
 
 MemoClient::MemoClient()
   : cfg_{},
-    httpTimeoutMs_(45000)
+    httpTimeoutMs_(45000),
+    lastCallDegraded_(false)
 {
 }
 
@@ -93,6 +94,10 @@ time_t MemoClient::parseLocalDateTime(const String& text)
 
 MemoEntry MemoClient::buildFallback(const String& transcript, time_t nowEpoch)
 {
+  // The due time below is invented, not understood. Record that so the app can
+  // tell the user, instead of presenting a made-up hour as a real reminder.
+  lastCallDegraded_ = true;
+  Serial1.println("[memo] degraded: model unreachable, due = now + 1h");
   MemoEntry e = summarizeWithRule(transcript, nowEpoch);
   // 1 hour from now keeps the entry sortable and visually meaningful. If RTC
   // is not available (nowEpoch == 0), leave hasDue false so the UI shows "--".
@@ -150,6 +155,7 @@ MemoEntry MemoClient::summarizeWithRule(const String& transcript, time_t nowEpoc
 MemoEntry MemoClient::summarizeOpenAICompatible(const String& transcript,
                                                 time_t nowEpoch)
 {
+  lastCallDegraded_ = false;
   String nowStr = formatLocalDateTime(nowEpoch);
   const char* weekday = (nowEpoch > 0) ? weekdayName(nowEpoch) : "Unknown";
 
@@ -243,6 +249,7 @@ MemoEntry MemoClient::summarizeOpenAICompatible(const String& transcript,
   body += "{\"model\":\"";
   body += voice_memo::jsonEscape(cfg_.model);
   body += "\",\"temperature\":0,";
+  if (cfg_.extraParams != nullptr) body += cfg_.extraParams;
   body += "\"response_format\":{\"type\":\"json_object\"},";
   body += "\"messages\":[";
   body += "{\"role\":\"system\",\"content\":\"";
@@ -293,6 +300,10 @@ MemoEntry MemoClient::summarizeOpenAICompatible(const String& transcript,
     e.dueEpoch = parsed;
     e.hasDue = true;
   } else if (nowEpoch > 0) {
+    // The model answered but the due time did not survive parsing: the hour
+    // below is ours, not the user's. Same honesty rule as buildFallback().
+    lastCallDegraded_ = true;
+    Serial1.printf("[memo] degraded: unparseable due \"%s\"\n", due.c_str());
     e.dueEpoch = nowEpoch + 3600;
     e.hasDue = true;
   } else {
@@ -307,5 +318,8 @@ MemoEntry MemoClient::summarize(const String& transcript, time_t nowEpoch)
   if (cfg_.provider == VM_MEMO_OPENAI_COMPATIBLE) {
     return summarizeOpenAICompatible(transcript, nowEpoch);
   }
+  // The rule-based provider is a deliberate choice, not a failure, but its due
+  // time is still a guess -- say so.
+  lastCallDegraded_ = true;
   return summarizeWithRule(transcript, nowEpoch);
 }
