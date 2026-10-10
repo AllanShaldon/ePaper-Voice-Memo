@@ -3,6 +3,54 @@
 #include <HTTPClient.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
+#include <esp_netif.h>
+
+// Public DNS for the bridge host. Measured 2026-10-10: the home router (Vivo)
+// answered NXDOMAIN for the bridge's name from its cache while 1.1.1.1/8.8.8.8
+// resolved it fine -- the device just saw "-1, connection failed" and every
+// reminder said "server unreachable". Set VM_PONTE_DNS1 to "" to keep the
+// router's DNS.
+#ifndef VM_PONTE_DNS1
+#define VM_PONTE_DNS1 "1.1.1.1"
+#endif
+#ifndef VM_PONTE_DNS2
+#define VM_PONTE_DNS2 "8.8.8.8"
+#endif
+
+namespace {
+
+void definirDns(esp_netif_t* n, esp_netif_dns_type_t tipo, const char* ip)
+{
+  if (!ip || !ip[0]) return;
+  esp_netif_dns_info_t d = {};
+  d.ip.type = ESP_IPADDR_TYPE_V4;
+  d.ip.u_addr.ip4.addr = esp_ip4addr_aton(ip);
+  esp_netif_set_dns_info(n, tipo, &d);
+}
+
+// Re-applied before every call: a DHCP renewal hands the router's DNS back.
+void fixarDnsPublico()
+{
+  esp_netif_t* n = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+  if (!n) return;
+  definirDns(n, ESP_NETIF_DNS_MAIN, VM_PONTE_DNS1);
+  definirDns(n, ESP_NETIF_DNS_BACKUP, VM_PONTE_DNS2);
+}
+
+// "https://host[:port]/..." -> "host"
+String hostDaUrl(const String& url)
+{
+  int i = url.indexOf("://");
+  i = (i < 0) ? 0 : i + 3;
+  int fim = url.length();
+  const int barra = url.indexOf('/', i);
+  const int doisPontos = url.indexOf(':', i);
+  if (barra >= 0) fim = barra;
+  if (doisPontos >= 0 && doisPontos < fim) fim = doisPontos;
+  return url.substring(i, fim);
+}
+
+}  // namespace
 
 void PonteClient::configure(const PonteConfig& cfg, uint32_t httpTimeoutMs)
 {
@@ -22,6 +70,16 @@ bool PonteClient::requisitar(const char* metodo, const String& caminho, const ch
 {
   out = PonteResposta();
   if (!ativa() || WiFi.status() != WL_CONNECTED) return false;
+
+  fixarDnsPublico();
+  // Name first, so a DNS failure is logged as one and not as a bare "-1".
+  const String host = hostDaUrl(url_);
+  IPAddress ip;
+  if (!WiFi.hostByName(host.c_str(), ip)) {
+    Serial1.printf("[ponte] DNS nao resolveu %s -- nada enviado\n", host.c_str());
+    out.httpCode = -100;
+    return false;
+  }
 
   HTTPClient http;
   WiFiClientSecure secure;
