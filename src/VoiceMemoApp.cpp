@@ -5,6 +5,7 @@
 #include <WiFi.h>
 
 #include "BatteryMath.h"
+#include "ClockRefreshPolicy.h"
 #include "UiLang.h"
 
 VoiceMemoApp::VoiceMemoApp(const VoiceMemoConfig& config)
@@ -106,6 +107,8 @@ void VoiceMemoApp::drawTodoList(const String& hint, bool processing,
   ui_.drawTodoList(store_, rtc_, currentStatus(processing), hint, quote_.quote(),
                    selectedIndex_, scrollOffset_, usePartial);
   lastListRefreshMs_ = millis();
+  // Any repaint shows the current HH:MM, so the per-minute clock pass can skip it.
+  lastDrawnMinute_ = vmMinuteOf(rtc_.nowEpoch());
 }
 
 bool VoiceMemoApp::ensureWiFi(uint32_t timeoutMs)
@@ -673,7 +676,13 @@ void VoiceMemoApp::pollScheduledRefresh()
 {
   if (recording_ || busy_) return;
   const unsigned long now = millis();
-  if (now - lastListRefreshMs_ < kListRefreshMs) return;
+  if (now - lastClockCheckMs_ < kClockCheckMs) return;
+  lastClockCheckMs_ = now;
+
+  // Repaint when the minute on screen is no longer the current one (it used to
+  // be every 5 minutes, so the clock read up to ~5 minutes behind).
+  const time_t epoch = rtc_.nowEpoch();
+  if (!vmClockNeedsRepaint(lastDrawnMinute_, epoch)) return;
 
   // KEY0 wins over the timed e-paper refresh, including the debounce window.
   // KEY0 优先级高于定时刷屏  包括按键防抖尚未稳定的短窗口。
@@ -683,7 +692,11 @@ void VoiceMemoApp::pollScheduledRefresh()
   // the one we just checked. Rate limited inside syncClockFromNtp().
   if (WiFi.status() == WL_CONNECTED) syncClockFromNtp(5000, false);
 
-  drawTodoList(uiStr(UiStringId::kHintAdd), false, true, /*partial=*/true);
+  // Partial (fast, no flash) every minute; a clean full pass on the hour,
+  // because partial refreshes leave residue on this panel.
+  const bool full = vmClockRepaintIsFull(rtc_.nowEpoch());
+  Serial1.printf("[tela] relogio %s (%s)\n", rtc_.nowTimeLabel().c_str(), full ? "completo" : "parcial");
+  drawTodoList(uiStr(UiStringId::kHintAdd), false, true, /*partial=*/!full);
 }
 
 void VoiceMemoApp::loop()

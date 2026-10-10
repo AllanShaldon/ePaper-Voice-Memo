@@ -99,7 +99,11 @@ class VoiceMemoApp {
   // 250 ms is under the gap between deliberate presses and far above the
   // 35 ms debounce.
   static constexpr unsigned long kNavSettleMs = 250;
-  static constexpr unsigned long kListRefreshMs = 5UL * 60UL * 1000UL;
+  // The clock repaints on every minute boundary (ClockRefreshPolicy.h); the RTC
+  // is read at most once a second to notice it.
+  static constexpr unsigned long kClockCheckMs = 1000UL;
+  long long     lastDrawnMinute_ = -1;
+  unsigned long lastClockCheckMs_ = 0;
   // The PCF8563 drifts; one SNTP round trip every 6 h keeps the header
   // honest without hammering the network.
   static constexpr unsigned long kNtpResyncMs = 6UL * 60UL * 60UL * 1000UL;
