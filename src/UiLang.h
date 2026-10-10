@@ -45,6 +45,9 @@ enum class UiStringId {
   kHintNoWifi,     // reminder dropped because WiFi is down
   kHintMaxLen,     // recording hit the maximum length
   kHintDueGuessed, // AI unreachable: the due time is the device's guess
+  kHintNoTime,     // bridge saved it, but the sentence had no time in it
+  kHintAiNoTime,   // bridge's AI was down: saved WITHOUT a time (never guessed)
+  kHintPonteOff,   // the bridge did not answer: nothing was saved
   kEmptyList,      // empty reminder list placeholder
   kProcessing,     // header "processing" tag
   kReminders,      // list title / fallback badge
@@ -66,6 +69,9 @@ inline const char* uiStrEn(UiStringId id) {
     case UiStringId::kHintNoWifi:   return "Reminder skipped because WiFi is unavailable.";
     case UiStringId::kHintMaxLen:   return "Stopped at max length. Hold KEY0 for another memo.";
     case UiStringId::kHintDueGuessed: return "AI offline: time is a guess. Say it again later.";
+    case UiStringId::kHintNoTime:     return "Saved without a time.";
+    case UiStringId::kHintAiNoTime:   return "AI offline: saved without a time.";
+    case UiStringId::kHintPonteOff:   return "Server unreachable: not saved. Try again.";
     case UiStringId::kEmptyList:    return "Hold KEY0 and speak to add your first reminder.";
     case UiStringId::kProcessing:   return "Processing";
     case UiStringId::kReminders:    return "Reminders";
@@ -88,6 +94,9 @@ inline const char* uiStrZh(UiStringId id) {
     case UiStringId::kHintNoWifi:   return "WiFi 不可用 本次提醒未保存";
     case UiStringId::kHintMaxLen:   return "已到最长录音 再次长按 KEY0 继续";
     case UiStringId::kHintDueGuessed: return "AI 未响应 时间为设备推测 请稍后重说";
+    case UiStringId::kHintNoTime:     return "已保存 未指定时间";
+    case UiStringId::kHintAiNoTime:   return "AI 未响应 已保存但无时间";
+    case UiStringId::kHintPonteOff:   return "服务器无响应 未保存 请重试";
     case UiStringId::kEmptyList:    return "长按 KEY0 说话 添加第一条提醒";
     case UiStringId::kProcessing:   return "处理中";
     case UiStringId::kReminders:    return "提醒";
@@ -119,6 +128,9 @@ inline const char* uiStrPt(UiStringId id) {
     case UiStringId::kNoSpeech:     return "Nada reconhecido.";
     case UiStringId::kHintPickFirst: return "Escolha um lembrete com KEY2 / KEY1 e depois clique no KEY0.";
     case UiStringId::kHintDueGuessed: return "IA fora do ar: o horário é chute. Repita mais tarde.";
+    case UiStringId::kHintNoTime:     return "Salvo sem horário.";
+    case UiStringId::kHintAiNoTime:   return "IA fora do ar: salvo sem horário.";
+    case UiStringId::kHintPonteOff:   return "Servidor não respondeu: nada salvo. Tente de novo.";
     default:                        return "";
   }
 }

@@ -15,8 +15,10 @@ constexpr const char* kNvsKey       = "items";
 constexpr const char* kNvsLangKey   = "lang";
 constexpr const char* kNvsAlertKey  = "alertw";
 
-constexpr uint8_t kFlagHasDue = 0x01;
-constexpr uint8_t kFlagDone   = 0x02;
+constexpr uint8_t kFlagHasDue   = 0x01;
+constexpr uint8_t kFlagDone     = 0x02;
+constexpr uint8_t kFlagPendSync = 0x04;   // v4
+constexpr uint8_t kBlobVersionV3 = 3;     // before the bridge: no remoteId
 
 void writeLE16(uint8_t* dst, uint16_t value)
 {
@@ -104,17 +106,23 @@ bool MemoStore::load()
   size_t offset = 0;
   const uint8_t version = buf[offset++];
   const uint8_t count   = buf[offset++];
-  if (version != kBlobVersion || count > kMax) {
-    // Different version -> ignore (no migration on purpose).
+  // v3 is the pre-bridge layout and is read on purpose: dropping it would wipe
+  // the reminders on the device the first time this firmware boots. Those come
+  // in with remoteId 0 and are uploaded to the bridge on the first sync.
+  const bool v4 = (version == kBlobVersion);
+  if ((!v4 && version != kBlobVersionV3) || count > kMax) {
+    // Unknown version -> ignore.
     count_ = 0;
     return false;
   }
 
   count_ = 0;
   for (uint8_t i = 0; i < count; i++) {
-    if (offset + 8 + 8 + 1 + 2 > read) { count_ = 0; return false; }
+    if (offset + 8 + 8 + 1 + 2 + (v4 ? 8 : 0) > read) { count_ = 0; return false; }
     const int64_t  due    = readLE64(buf + offset); offset += 8;
     const int64_t  doneAt = readLE64(buf + offset); offset += 8;
+    const int64_t  rid    = v4 ? readLE64(buf + offset) : 0;
+    if (v4) offset += 8;
     const uint8_t  flags  = buf[offset++];
     const uint16_t tlen   = readLE16(buf + offset); offset += 2;
     if (offset + tlen + 2 > read) { count_ = 0; return false; }
@@ -124,6 +132,8 @@ bool MemoStore::load()
     e.doneAt   = static_cast<time_t>(doneAt);
     e.hasDue   = (flags & kFlagHasDue) != 0;
     e.done     = (flags & kFlagDone)   != 0;
+    e.pendSync = (flags & kFlagPendSync) != 0;
+    e.remoteId = static_cast<long long>(rid);
 
     e.text = "";
     e.text.reserve(tlen);
@@ -159,13 +169,15 @@ bool MemoStore::save()
     const uint16_t tlen = static_cast<uint16_t>(e.text.length());
     const uint16_t flen = static_cast<uint16_t>(e.fuzzyLabel.length());
 
-    if (offset + 8 + 8 + 1 + 2 + tlen + 2 + flen > sizeof(buf)) return false;
+    if (offset + 8 + 8 + 8 + 1 + 2 + tlen + 2 + flen > sizeof(buf)) return false;
 
     writeLE64(buf + offset, static_cast<int64_t>(e.dueEpoch)); offset += 8;
     writeLE64(buf + offset, static_cast<int64_t>(e.doneAt));   offset += 8;
+    writeLE64(buf + offset, static_cast<int64_t>(e.remoteId)); offset += 8;
     uint8_t flags = 0;
-    if (e.hasDue) flags |= kFlagHasDue;
-    if (e.done)   flags |= kFlagDone;
+    if (e.hasDue)   flags |= kFlagHasDue;
+    if (e.done)     flags |= kFlagDone;
+    if (e.pendSync) flags |= kFlagPendSync;
     buf[offset++] = flags;
 
     writeLE16(buf + offset, tlen); offset += 2;
@@ -277,6 +289,74 @@ bool MemoStore::toggleDone(size_t i, time_t now)
   // Stamp when it became done so purgeExpiredDone() can age it out; clear the
   // stamp on un-done so the entry goes back to living indefinitely.
   items_[i].doneAt = items_[i].done ? now : 0;
+  // Owed to the bridge until a sync confirms it (kept across power cycles).
+  items_[i].pendSync = true;
+  return save();
+}
+
+bool MemoStore::applyPonte(const std::vector<PonteItem>& remote, long tzOffsetSeconds, time_t now)
+{
+  MemoEntry novo[kMax];
+  size_t n = 0;
+  bool usado[kMax] = {};
+
+  // 1) the bridge's list, in its order (by time), carrying over a local change
+  //    that has not reached the bridge yet.
+  for (size_t r = 0; r < remote.size() && n < kMax; r++) {
+    const PonteItem& it = remote[r];
+    MemoEntry e;
+    e.text       = vmSanitizeDisplayText(String(it.texto.c_str()));
+    e.fuzzyLabel = "";
+    e.hasDue     = it.temHorario;
+    e.dueEpoch   = static_cast<time_t>(vmPonteLocalEpoch(it.quandoTs, tzOffsetSeconds));
+    e.remoteId   = it.id;
+    for (size_t l = 0; l < count_; l++) {
+      if (usado[l] || items_[l].remoteId != it.id) continue;
+      usado[l] = true;
+      if (vmPonteLocalDoneWins(items_[l].pendSync)) {
+        e.done     = items_[l].done;
+        e.doneAt   = items_[l].doneAt;
+        e.pendSync = true;
+      }
+      break;
+    }
+    novo[n++] = e;
+  }
+
+  // 2) local entries the bridge did not send but that must stay (not uploaded,
+  //    change pending, or just checked off -- see vmPonteKeepLocalOnly).
+  for (size_t l = 0; l < count_ && n < kMax; l++) {
+    if (usado[l]) continue;
+    const MemoEntry& e = items_[l];
+    if (vmPonteKeepLocalOnly(e.remoteId, e.done, e.doneAt, e.pendSync, now, kDoneTtlSeconds)) {
+      novo[n++] = e;
+    }
+  }
+
+  bool mudou = (n != count_);
+  for (size_t i = 0; i < n && !mudou; i++) {
+    const MemoEntry& a = novo[i];
+    const MemoEntry& b = items_[i];
+    mudou = a.remoteId != b.remoteId || a.text != b.text || a.dueEpoch != b.dueEpoch ||
+            a.hasDue != b.hasDue || a.done != b.done || a.pendSync != b.pendSync;
+  }
+  for (size_t i = 0; i < n; i++) items_[i] = novo[i];
+  count_ = n;
+  if (mudou) save();
+  return mudou;
+}
+
+bool MemoStore::markUploaded(size_t i, long long remoteId)
+{
+  if (i >= count_ || remoteId <= 0) return false;
+  items_[i].remoteId = remoteId;
+  return save();
+}
+
+bool MemoStore::markSynced(size_t i)
+{
+  if (i >= count_) return false;
+  items_[i].pendSync = false;
   return save();
 }
 

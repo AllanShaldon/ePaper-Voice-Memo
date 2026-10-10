@@ -38,10 +38,20 @@
 #ifndef VM_GROQ_API_KEY
 #define VM_GROQ_API_KEY ""
 #endif
+// Bridge (ponte): base URL + this device's own token. Both set = the bridge is
+// the reminder store and understands the voice (no AI key needed on board).
+#ifndef VM_PONTE_URL
+#define VM_PONTE_URL ""
+#endif
+#ifndef VM_PONTE_TOKEN
+#define VM_PONTE_TOKEN ""
+#endif
 
 static String nvsWifiSsid;
 static String nvsWifiPass;
 static String nvsApiKey;
+static String nvsPonteUrl;
+static String nvsPonteToken;
 
 static void loadNvsCredentials()
 {
@@ -50,11 +60,15 @@ static void loadNvsCredentials()
     nvsWifiSsid = VM_WIFI_SSID;
     nvsWifiPass = VM_WIFI_PASSWORD;
     nvsApiKey   = VM_GROQ_API_KEY;
+    nvsPonteUrl   = VM_PONTE_URL;
+    nvsPonteToken = VM_PONTE_TOKEN;
     return;
   }
   nvsWifiSsid = prefs.getString("wifiSsid", VM_WIFI_SSID);
   nvsWifiPass = prefs.getString("wifiPass", VM_WIFI_PASSWORD);
   nvsApiKey   = prefs.getString("apiKey", VM_GROQ_API_KEY);
+  nvsPonteUrl   = prefs.getString("ponteUrl", VM_PONTE_URL);
+  nvsPonteToken = prefs.getString("ponteToken", VM_PONTE_TOKEN);
   prefs.end();
 }
 
@@ -95,6 +109,11 @@ static VoiceMemoConfig buildConfig()
     },
 
     .httpTimeoutMs = 45000,
+
+    .ponte = {
+      .url   = nvsPonteUrl.c_str(),
+      .token = nvsPonteToken.c_str(),
+    },
   };
 }
 

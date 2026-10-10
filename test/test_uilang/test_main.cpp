@@ -45,6 +45,9 @@ void test_every_id_nonempty_and_distinct() {
         const UiStringId id = static_cast<UiStringId>(i);
         TEST_ASSERT_TRUE(uiStrEn(id)[0] != '\0');
         TEST_ASSERT_TRUE(uiStrZh(id)[0] != '\0');
+        // The PT build is the one on the device; a missing PT case falls into
+        // `default: return ""` and the hint silently disappears from the screen.
+        TEST_ASSERT_TRUE(uiStrPt(id)[0] != '\0');
         TEST_ASSERT_TRUE(strcmp(uiStrEn(id), uiStrZh(id)) != 0);
     }
 }

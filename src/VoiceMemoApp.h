@@ -28,6 +28,7 @@
 #include "MemoStore.h"
 #include "MemoUI.h"
 #include "NtpSync.h"
+#include "PonteClient.h"
 #include "RtcClock.h"
 #include "SpeechClient.h"
 #include "TouchInput.h"
@@ -47,6 +48,9 @@ struct VoiceMemoConfig {
   MemoConfig   memo;
   AudioConfig  audio;
   uint32_t     httpTimeoutMs;
+  // Bridge (ponte): when url + token are set, the bridge is the reminder store
+  // and understands the voice; speech/memo above are only the no-bridge path.
+  PonteConfig  ponte;
 };
 
 class VoiceMemoApp {
@@ -107,6 +111,11 @@ class VoiceMemoApp {
   MemoStore    store_;
   SpeechClient stt_;
   MemoClient   memo_;
+  PonteClient  ponte_;
+  bool          ponteDevendo_ = false;      // a local change waits to be sent
+  unsigned long lastPonteSyncMs_ = 0;
+  static constexpr unsigned long kPonteSyncMs = 2UL * 60UL * 1000UL;
+  static constexpr unsigned long kPonteRetryMs = 15UL * 1000UL;
   DailyQuoteClient quote_;
   MemoUI       ui_;
   TouchInput   touch_;
@@ -197,6 +206,11 @@ class VoiceMemoApp {
   // Completes / un-completes the selected card. No-op when nothing is selected.
   void toggleSelected();
   void pollScheduledRefresh();
+  // Bridge sync: upload local-only entries, send pending done/undone, then pull
+  // the list. Returns true when the visible list changed.
+  bool syncPonte();
+  void pollPonteSync();
+  bool key0MayBeActive(unsigned long nowMs);
   void startRecording();
   void stopRecording(bool forced);
   void captureChunk();

@@ -33,7 +33,10 @@
 #include <Arduino.h>
 #include <time.h>
 
+#include <vector>
+
 #include "DonePolicy.h"
+#include "PonteProtocol.h"
 
 struct MemoEntry {
   String text;        // one reminder sentence, in the firmware's UI language
@@ -42,6 +45,9 @@ struct MemoEntry {
   bool   hasDue   = false;
   bool   done     = false;  // user checked it off
   time_t doneAt   = 0;   // epoch when `done` was last set true; 0 while undone.
+  // Bridge (ponte) sync, 2026-10-09: the bridge is the one store of reminders.
+  long long remoteId = 0;   // id at the bridge; 0 = only here, not uploaded yet
+  bool      pendSync = false;  // a local change (done/undone) not sent yet
                       // Drives the delayed purge: a completed reminder stays
                       // visible (struck through, at the bottom) for
                       // kDoneTtlSeconds so it still reads as "I did that",
@@ -102,8 +108,18 @@ class MemoStore {
   size_t           count() const { return count_; }
   const MemoEntry& at(size_t i) const { return items_[i]; }
 
+  // Bridge sync. Replace the list with what the bridge sent, keeping the
+  // local-only and not-yet-sent entries (rule in PonteProtocol.h). Returns
+  // true when something visible changed (caller repaints only then).
+  bool applyPonte(const std::vector<PonteItem>& remote, long tzOffsetSeconds, time_t now);
+  // An entry reached the bridge: store its id / clear the pending flag.
+  bool markUploaded(size_t i, long long remoteId);
+  bool markSynced(size_t i);
+
  private:
-  static constexpr uint8_t kBlobVersion = 3;
+  // v4 adds remoteId + pendSync. v3 (before the bridge) is still READ, so the
+  // reminders already on the device survive the update and get uploaded.
+  static constexpr uint8_t kBlobVersion = 4;
   // 8 entries * (8 + 1 + 2 + 200 + 2 + 32) ~= 2 KB. Reserve 4 KB to leave
   // headroom for longer transcripts a future contributor might want.
   static constexpr size_t kMaxBlobBytes = 4096;

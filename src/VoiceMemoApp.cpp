@@ -202,6 +202,8 @@ void VoiceMemoApp::begin()
 
   stt_.configure(config_.speech, config_.httpTimeoutMs);
   memo_.configure(config_.memo,  config_.httpTimeoutMs);
+  ponte_.configure(config_.ponte, config_.httpTimeoutMs);
+  Serial1.printf("[ponte] %s\n", ponte_.ativa() ? "ativa: a ponte e' a base de lembretes" : "desligada (sem url/token)");
   quote_.configure(config_.memo, config_.httpTimeoutMs);
   quote_.begin(rtc_.nowEpoch());
 
@@ -213,6 +215,10 @@ void VoiceMemoApp::begin()
   Serial1.printf("[rtc] before ntp: %s %s\n",
                  rtc_.nowDateLabel().c_str(), rtc_.nowTimeLabel().c_str());
   syncClockFromNtp(10000, true);
+
+  // First sync before the first draw: the screen opens on the shared list.
+  if (syncPonte()) Serial1.println("[ponte] lista sincronizada no boot");
+  lastPonteSyncMs_ = millis();
 
   drawTodoList(uiStr(UiStringId::kHintAdd), false, true, /*partial=*/true);
 }
@@ -265,6 +271,31 @@ void VoiceMemoApp::stopRecording(bool forced)
   if (!ensureWiFi(10000)) {
     ledOff();
     drawTodoList(uiStr(UiStringId::kHintNoWifi), false, false);
+    busy_ = false;
+    return;
+  }
+
+  if (ponte_.ativa()) {
+    // The bridge is the store and the brain: it transcribes, works out what
+    // and when, saves it, and answers with the whole list in one round trip.
+    // Pending local changes go first, so the list that comes back has them.
+    syncPonte();
+    PonteResposta r;
+    const bool ok = ponte_.enviarVoz(audio_.wavData(), audio_.wavSize(), r);
+    Serial1.printf("[ponte] voz: http=%d \"%s\" aviso=\"%s\"\n", r.httpCode,
+                   r.transcricao.c_str(), r.aviso.c_str());
+    if (r.listaOk) store_.applyPonte(r.lista, VM_TZ_OFFSET_SECONDS, rtc_.nowEpoch());
+    ledOff();
+
+    // Nothing is guessed: a missing time says so, a failed save says so.
+    String hint;
+    if (ok && r.aviso == "ia_indisponivel")  hint = uiStr(UiStringId::kHintAiNoTime);
+    else if (ok && r.aviso == "sem_horario") hint = uiStr(UiStringId::kHintNoTime);
+    else if (ok)                             hint = uiStr(forced ? UiStringId::kHintMaxLen : UiStringId::kHintAdd);
+    else if (r.httpCode == 422)              hint = uiStr(UiStringId::kNoSpeech);
+    else                                     hint = uiStr(UiStringId::kHintPonteOff);
+    lastPonteSyncMs_ = millis();
+    drawTodoList(hint, false, true);
     busy_ = false;
     return;
   }
@@ -412,6 +443,7 @@ void VoiceMemoApp::toggleSelected()
 
   const time_t now = rtc_.nowEpoch();
   store_.toggleDone(static_cast<size_t>(selectedIndex_), now);
+  ponteDevendo_ = true;   // sent to the bridge once this repaint settles
   Serial1.printf("[nav] concluido toggle linha %d\n", selectedIndex_);
 
   // The card jumps to the bottom (or back up) on the next sort, so keeping the
@@ -567,8 +599,74 @@ void VoiceMemoApp::pollTouch()
 
   Serial1.printf("[touch] toggle row %d\n", idx);
   store_.toggleDone(static_cast<size_t>(idx), rtc_.nowEpoch());
+  ponteDevendo_ = true;
   drawTodoList(uiStr(UiStringId::kHintAdd), false, false);
 #endif
+}
+
+bool VoiceMemoApp::key0MayBeActive(unsigned long nowMs)
+{
+  // Anything that blocks the loop (an e-paper refresh, a network call) must not
+  // start while KEY0 could be going down: the hold-to-record would be lost.
+  const bool rawButton = digitalRead(kKey0Pin);
+  return rawButton == LOW
+      || lastRawButton_ == LOW
+      || stableButton_ == LOW
+      || rawButton != stableButton_
+      || nowMs - debounceMs_ <= kDebounceDelayMs;
+}
+
+bool VoiceMemoApp::syncPonte()
+{
+  if (!ponte_.ativa() || WiFi.status() != WL_CONNECTED) return false;
+  const long tz = VM_TZ_OFFSET_SECONDS;
+  PonteResposta r;
+
+  // 1) Reminders only this device has (the pre-bridge list, or one made while
+  //    the bridge was down) go up once. Done ones are not worth uploading.
+  for (size_t i = 0; i < store_.count(); i++) {
+    const MemoEntry& e = store_.at(i);
+    if (e.remoteId > 0 || e.done) continue;
+    const long long utc = e.hasDue ? vmPonteUtcEpoch(static_cast<long long>(e.dueEpoch), tz) : 0;
+    if (!ponte_.importar(e.text, utc, r) || r.criadoId <= 0) return false;
+    store_.markUploaded(i, r.criadoId);
+  }
+
+  // 2) Done/undone changes made here.
+  for (size_t i = 0; i < store_.count(); i++) {
+    const MemoEntry& e = store_.at(i);
+    if (!e.pendSync || e.remoteId <= 0) continue;
+    const bool ok = ponte_.concluir(e.remoteId, e.done, r);
+    // 404 = the bridge no longer has it (cancelled there): nothing left to send.
+    if (ok || r.httpCode == 404) store_.markSynced(i);
+    else return false;
+  }
+  ponteDevendo_ = false;
+
+  // 3) The list itself. A failed or unreadable answer keeps the local copy.
+  if (!ponte_.listar(r) || !r.listaOk) return false;
+  return store_.applyPonte(r.lista, tz, rtc_.nowEpoch());
+}
+
+void VoiceMemoApp::pollPonteSync()
+{
+  if (!ponte_.ativa() || recording_ || busy_) return;
+  const unsigned long now = millis();
+  // A change made here goes out as soon as its repaint has settled (at most
+  // every kPonteRetryMs, so a bridge that is down is not hammered); otherwise
+  // the list is pulled every kPonteSyncMs (what the WhatsApp side added).
+  const unsigned long desde = now - lastPonteSyncMs_;
+  const bool devido = ponteDevendo_ && !listDirty_ && now - lastNavMs_ > 2 * kNavSettleMs
+                      && desde >= kPonteRetryMs;
+  const bool periodico = desde >= kPonteSyncMs;
+  if (!devido && !periodico) return;
+  if (key0MayBeActive(now)) return;
+  lastPonteSyncMs_ = now;   // marks the ATTEMPT: success or not, wait for the next window
+  if (WiFi.status() != WL_CONNECTED && !ensureWiFi(3000)) return;
+  if (syncPonte()) {
+    listDirty_ = true;
+    lastNavMs_ = millis() - kNavSettleMs;   // repaint now, no extra wait
+  }
 }
 
 void VoiceMemoApp::pollScheduledRefresh()
@@ -579,14 +677,7 @@ void VoiceMemoApp::pollScheduledRefresh()
 
   // KEY0 wins over the timed e-paper refresh, including the debounce window.
   // KEY0 优先级高于定时刷屏  包括按键防抖尚未稳定的短窗口。
-  const bool rawButton = digitalRead(kKey0Pin);
-  const bool key0MayBeActive =
-      rawButton == LOW
-      || lastRawButton_ == LOW
-      || stableButton_ == LOW
-      || rawButton != stableButton_
-      || now - debounceMs_ <= kDebounceDelayMs;
-  if (key0MayBeActive) return;
+  if (key0MayBeActive(now)) return;
 
   // Piggyback on the timed refresh so the clock the user is about to read is
   // the one we just checked. Rate limited inside syncClockFromNtp().
@@ -603,5 +694,6 @@ void VoiceMemoApp::loop()
   pollDueAlarm();
   flushPendingRedraw();
   pollTouch();
+  pollPonteSync();
   pollScheduledRefresh();
 }

@@ -3,3 +3,7 @@
 #define VM_WIFI_SSID     "your_wifi_ssid"
 #define VM_WIFI_PASSWORD "your_wifi_password"
 #define VM_GROQ_API_KEY  "your_groq_api_key"
+// Optional: the bridge that keeps the shared reminder list. With both set the
+// device sends the voice there and syncs the list; the Groq key is not used.
+// #define VM_PONTE_URL   "https://your-bridge-host"
+// #define VM_PONTE_TOKEN "device_token_from_POST_/api/config/dispositivo-token"
